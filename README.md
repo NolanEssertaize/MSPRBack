@@ -4,18 +4,18 @@
 This application is a comprehensive plant care management system built with FastAPI. It allows users to register their plants, request plant care services from botanists, and manage plant care instructions.
 
 ## Features
-- 🌱 Plant Management
+- 🌱 **Plant Management**
   - Register new plants
   - Upload plant photos
   - Add care instructions
   - Track plant locations
 
-- 👤 User Management
+- 👤 **User Management**
   - User registration and authentication
   - JWT token-based security
   - Role-based access (regular users and botanists)
 
-- 🤝 Care Request System
+- 🤝 **Care Request System**
   - Create care requests for plants
   - Match plant owners with botanists
   - Track care request status
@@ -26,13 +26,60 @@ This application is a comprehensive plant care management system built with Fast
 - **Authentication**: JWT tokens
 - **Migration Tool**: Alembic
 - **API Documentation**: Swagger/OpenAPI
+- **Containerization**: Docker and Docker Compose
 
 ## Prerequisites
-- Python 3.10 or higher
+- Docker and Docker Compose (for containerized deployment)
+- Python 3.10 or higher (for local development)
 - pip (Python package manager)
-- virtualenv (recommended)
+- virtualenv (recommended for local development)
 
-## Installation
+## Installation and Deployment
+
+### Using Docker (Recommended)
+
+1. Clone the repository:
+```bash
+git clone [repository-url]
+cd plant-care-app
+```
+
+2. Configure environment variables:
+   The default configuration is in `docker-compose.yml`. For production, you should change the `SECRET_KEY`.
+
+3. Build and start the Docker containers:
+```bash
+docker-compose up -d
+```
+
+4. Initialize the database (first time only):
+```bash
+docker-compose exec api alembic upgrade head
+```
+
+5. Access the application:
+   - API: http://localhost:8000
+   - Documentation: http://localhost:8000/docs
+   - Alternative documentation: http://localhost:8000/redoc
+
+6. Additional Docker commands:
+
+   - View logs:
+   ```bash
+   docker-compose logs -f
+   ```
+
+   - Stop the application:
+   ```bash
+   docker-compose down
+   ```
+
+   - Rebuild after changes:
+   ```bash
+   docker-compose up --build -d
+   ```
+
+### Local Development Setup
 
 1. Clone the repository:
 ```bash
@@ -65,17 +112,28 @@ ACCESS_TOKEN_EXPIRE_MINUTES=30
 alembic upgrade head
 ```
 
-## Running the Application
-
-Start the application with:
+6. Start the application:
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The application will be available at:
-- API: http://localhost:8000
-- Documentation: http://localhost:8000/docs
-- Alternative documentation: http://localhost:8000/redoc
+## API Endpoints
+
+### Authentication
+- `POST /token` - Get access token
+- `POST /users/` - Create new user
+
+### Plants
+- `POST /plants/` - Create new plant
+- `GET /my_plants/` - List user's plants
+- `GET /all_plants/` - List all plants except user's
+- `PUT /plants/{id}` - Update plant
+- `DELETE /plants/` - Delete plant
+
+### Care Requests
+- `PUT /plants/{plant_id}/start-care` - Start plant care
+- `PUT /plants/{plant_id}/end-care` - End plant care
+- `GET /care-requests/` - List care requests
 
 ## Project Structure
 ```
@@ -94,34 +152,30 @@ plant_care_app/
 ├── photos/                   # Uploaded plant photos
 ├── requirements.txt          # Project dependencies
 ├── alembic.ini              # Alembic configuration
-└── .env                     # Environment variables
+├── Dockerfile               # Docker image configuration
+├── docker-compose.yml       # Docker Compose configuration
+├── .dockerignore            # Docker build exclusions
+└── .env                     # Environment variables (local dev only)
 ```
 
-## API Endpoints
+## Docker Configuration Files
 
-### Authentication
-- `POST /token` - Get access token
-- `POST /users/` - Create new user
+### Dockerfile
+The Dockerfile defines how to build the application container:
+- Uses Python 3.10 slim image
+- Installs dependencies
+- Sets up the application files
+- Configures the container to run the FastAPI server
 
-### Plants
-- `POST /plants/` - Create new plant
-- `GET /plants/` - List user's plants
-- `GET /plants/{id}` - Get plant details
-- `PUT /plants/{id}` - Update plant
-- `DELETE /plants/{id}` - Delete plant
+### docker-compose.yml
+The docker-compose.yml file defines the services and their configuration:
+- API service running the FastAPI application
+- Volume mounts for persistent data (database and photos)
+- Port forwarding (8000:8000)
+- Environment variables configuration
 
-### Care Requests
-- `POST /care-requests/` - Create care request
-- `GET /care-requests/` - List care requests
-- `PUT /care-requests/{id}` - Update care request status
-- `DELETE /care-requests/{id}` - Cancel care request
-
-## Testing
-
-Run the test suite with:
-```bash
-pytest
-```
+### .dockerignore
+Specifies which files should be excluded when building the Docker image to keep it clean and efficient.
 
 ## Development
 
@@ -141,18 +195,52 @@ alembic upgrade head
 - Document functions and classes
 - Keep functions focused and small
 
-## Contributing
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
+## Testing
+
+Run the test suite with:
+```bash
+pytest
+```
+
+With Docker:
+```bash
+docker-compose exec api pytest
+```
 
 ## Security Notes
 - Change the default SECRET_KEY in production
 - Use HTTPS in production
 - Implement rate limiting for production use
 - Regularly update dependencies
+
+## Backup and Maintenance
+
+### Data Backup
+The application uses volumes to persist data outside the container:
+- Database file (`a_rosa_je.db`)
+- Plant photos directory (`photos/`)
+
+To backup your data, simply copy these files from the host machine.
+
+### Database Migrations
+After making model changes, create and apply migrations:
+
+With Docker:
+```bash
+docker-compose exec api alembic revision --autogenerate -m "Description of changes"
+docker-compose exec api alembic upgrade head
+```
+
+## Troubleshooting
+
+### Common Issues
+- **Database Connection Issues**: Verify the database file exists and has proper permissions
+- **Photo Upload Failures**: Check the photos directory exists and has write permissions
+- **Authentication Errors**: Verify your token hasn't expired (default is 30 minutes)
+
+### Docker Specific
+- **Container Won't Start**: Check logs with `docker-compose logs -f api`
+- **Volume Mount Issues**: Verify path in docker-compose.yml and directory permissions
 
 ## License
 [Your License Here]
