@@ -1,0 +1,17 @@
+version: '3'
+
+services:
+  api:
+    build: .
+    container_name: plant_care_api
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./photos:/app/photos
+      - ./a_rosa_je.db:/app/a_rosa_je.db
+    environment:
+      - DATABASE_URL=sqlite:///./a_rosa_je.db
+      - SECRET_KEY=your-production-secret-key-change-this
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    restart: unless-stopped

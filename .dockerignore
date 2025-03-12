@@ -1,0 +1,44 @@
+# Environnements virtuels
+.venv/
+venv/
+ENV/
+
+# Fichiers de cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Fichiers locaux
+.env
+.git
+.gitignore
+
+# Base de données (nous la montons comme volume)
+*.db
+
+# Photos (nous les montons comme volume)
+photos/
+
+# Autres
+.DS_Store
+.idea/
+.vscode/
