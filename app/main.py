@@ -213,7 +213,7 @@ async def create_plant(
         care_instructions: str | None = None,
         photo: UploadFile = File(),
         current_user: models.User = Depends(auth.get_current_user),
-        in_care: bool = False,
+        in_care_id: int = None,
         db: Session = Depends(get_db)
 ):
     """
@@ -236,7 +236,7 @@ async def create_plant(
         "location": location,
         "care_instructions": care_instructions,
         "owner_id": current_user.id,
-        "in_care": in_care
+        "in_care_id": in_care_id
     }
 
     db_plant = models.Plant(**plant_data)
@@ -260,7 +260,7 @@ async def update_plant(
         care_instructions: str | None = None,
         photo: UploadFile = File(None),
         current_user: models.User = Depends(auth.get_current_user),
-        in_care: bool = None,
+        in_care_id: int = None,
         db: Session = Depends(get_db)
 ):
     """
@@ -303,8 +303,8 @@ async def update_plant(
     if care_instructions is not None:
         plant.care_instructions = care_instructions
     
-    if in_care is not None:
-        plant.in_care = in_care
+    if in_care_id is not None:
+        plant.in_care_id = in_care_id
     
     if photo and photo.filename:
         if plant.photo_url and os.path.exists(plant.photo_url.replace(f"{base_url}/", "")):
@@ -424,10 +424,7 @@ async def start_plant_care(
         - Valid JWT token in Authorization header
     """
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
-    if not plant or plant.owner_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Plant not found or not owned by user")
-
-    plant.in_care = True
+    plant.in_care_id = current_user.id
     db.commit()
     db.refresh(plant)
     return plant
@@ -440,10 +437,10 @@ async def end_plant_care(
         db: Session = Depends(get_db)
 ):
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
-    if not plant or plant.owner_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Plant not found or not owned by user")
+    if not plant or plant.in_care_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Plant not found or not caring by user")
 
-    plant.in_care = False
+    plant.in_care_id = None
     plant.plant_sitting = None
     db.commit()
     db.refresh(plant)

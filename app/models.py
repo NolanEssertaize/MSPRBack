@@ -31,7 +31,7 @@ class Plant(Base):
     photo_url = Column(String)
     owner_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
-    in_care = Column(Boolean, default=False)
+    in_care_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     plant_sitting = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Define both relationships here
