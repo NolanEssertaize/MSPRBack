@@ -16,15 +16,13 @@ base_url = "localhost:8000"
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="A_rosa_je API")
-# Create the photos directory if it doesn't exist
 os.makedirs("photos", exist_ok=True)
 
-# Add this after creating the FastAPI app
 app.mount("/photos", StaticFiles(directory="photos"), name="photos")
 
 app.add_middleware(
     CORSMiddleware,
-     allow_origins=["http://localhost:5000"],
+    allow_origins=["http://localhost:5000"],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -462,3 +460,178 @@ async def list_care_requests(
         if plant.photo_url:
             plant.photo_url = base_url + "/" +  photofile
     return care_requests
+
+# ======= COMMENTARY MANAGEMENT =======
+
+@app.post("/comments/", tags=["Comments"])
+async def create_comment(
+    plant_id: int,
+    comment: str,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a comment on a plant.
+
+    Parameters:
+    - plant_id: ID of the plant to comment on
+    - comment: Text of the comment
+
+    Returns:
+    - Created comment object
+
+    Raises:
+    - 404: If plant is not found
+
+    Requires:
+    - Valid JWT token in Authorization header
+    """
+    # Check if plant exists
+    plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
+    if not plant:
+        raise HTTPException(status_code=404, detail="Plant not found")
+
+    # Create comment
+    db_comment = models.Comment(
+        plant_id=plant_id,
+        user_id=current_user.id,
+        comment=comment
+    )
+    
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+    return db_comment
+
+
+@app.get("/plants/{plant_id}/comments/", tags=["Comments"])
+async def get_plant_comments(
+    plant_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all comments for a specific plant.
+
+    Parameters:
+    - plant_id: ID of the plant to get comments for
+
+    Returns:
+    - List of comment objects
+
+    Raises:
+    - 404: If plant is not found
+
+    Requires:
+    - Valid JWT token in Authorization header
+    """
+    plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
+    if not plant:
+        raise HTTPException(status_code=404, detail="Plant not found")
+
+    comments = db.query(models.Comment).filter(models.Comment.plant_id == plant_id).all()
+    return comments
+
+
+@app.put("/comments/{comment_id}", tags=["Comments"])
+async def update_comment(
+    comment_id: int,
+    comment_text: str,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update a comment.
+
+    Parameters:
+    - comment_id: ID of the comment to update
+    - comment_text: New text for the comment
+
+    Returns:
+    - Updated comment object
+
+    Raises:
+    - 404: If comment is not found
+    - 403: If user is not the author of the comment
+
+    Requires:
+    - Valid JWT token in Authorization header
+    """
+    db_comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
+    if not db_comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    
+    if db_comment.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this comment")
+    
+    db_comment.comment = comment_text
+    db.commit()
+    db.refresh(db_comment)
+    return db_comment
+
+
+@app.delete("/comments/{comment_id}", tags=["Comments"])
+async def delete_comment(
+    comment_id: int,
+    current_user: models.User = Depends(auth.get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a comment.
+
+    Parameters:
+    - comment_id: ID of the comment to delete
+
+    Returns:
+    - Deleted comment object
+
+    Raises:
+    - 404: If comment is not found
+    - 403: If user is not the author of the comment or plant owner
+
+    Requires:
+    - Valid JWT token in Authorization header
+    """
+    db_comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
+    if not db_comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    
+    plant = db.query(models.Plant).filter(models.Plant.id == db_comment.plant_id).first()
+    
+    if db_comment.user_id != current_user.id and plant.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=403, 
+            detail="Not authorized to delete this comment. Must be comment author or plant owner."
+        )
+    
+    db.delete(db_comment)
+    db.commit()
+    return db_comment
+
+
+@app.get("/users/{user_id}/comments/", tags=["Comments"])
+async def get_user_comments(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    """
+    Get all comments made by a specific user.
+
+    Parameters:
+    - user_id: ID of the user to get comments for
+
+    Returns:
+    - List of comment objects
+
+    Raises:
+    - 404: If user is not found
+
+    Requires:
+    - Valid JWT token in Authorization header
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    comments = db.query(models.Comment).filter(models.Comment.user_id == user_id).all()
+    return comments

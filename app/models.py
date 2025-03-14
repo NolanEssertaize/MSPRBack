@@ -19,6 +19,9 @@ class User(Base):
     owned_plants = relationship("Plant",
                                 back_populates="owner",
                                 foreign_keys="[Plant.owner_id]")
+    comments = relationship("Comment", 
+                        back_populates="user",
+                        cascade="all, delete-orphan")
 
 
 class Plant(Base):
@@ -33,12 +36,24 @@ class Plant(Base):
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     in_care_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     plant_sitting = Column(Integer, ForeignKey("users.id"), nullable=True)
-
-    # Define both relationships here
     owner = relationship("User",
-                         foreign_keys=[owner_id],
-                         back_populates="owned_plants",
-                         lazy="joined")
+                        foreign_keys=[owner_id],
+                        back_populates="owned_plants",
+                        lazy="joined")
     sitter = relationship("User",
-                          foreign_keys=[plant_sitting],
-                          primaryjoin="Plant.plant_sitting == User.id")
+                         foreign_keys=[plant_sitting],
+                         primaryjoin="Plant.plant_sitting == User.id")
+    comments = relationship("Comment", 
+                          back_populates="plant",
+                          cascade="all, delete-orphan")
+    
+class Comment(Base):
+    __tablename__ = "commentary" 
+
+    id = Column(Integer, primary_key=True, index=True)
+    plant_id = Column(Integer, ForeignKey("plants.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    comment = Column(String, nullable=False)
+    
+    user = relationship("User", back_populates="comments")
+    plant = relationship("Plant", back_populates="comments")
