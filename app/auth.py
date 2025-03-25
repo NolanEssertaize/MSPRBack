@@ -5,9 +5,11 @@ from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from app.database import get_db
 from app.config import settings
 from app import models
+from app.encryption import encrypt_text, decrypt_text, search_encrypted_field
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -28,6 +30,17 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+def get_user_by_email(db: Session, email: str):
+    """
+    Find a user by email, handling encrypted email fields.
+    This function uses the search_encrypted_field utility to search through encrypted emails.
+    """
+    # Since email is encrypted, we need to use our custom search function
+    matching_users = search_encrypted_field(models.User, db, 'email', email, exact_match=True)
+    if matching_users:
+        return matching_users[0]
+    return None
+
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -41,7 +54,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    user = db.query(models.User).filter(models.User.email == email).first()
+    
+    # Get user with encrypted email
+    user = get_user_by_email(db, email)
     if user is None:
         raise credentials_exception
+    return user
+
+def authenticate_user(db: Session, email: str, password: str):
+    """Authenticate a user with email and password, handling encrypted fields."""
+    user = get_user_by_email(db, email)
+    if not user:
+        return False
+    if not verify_password(password, user.hashed_password):
+        return False
     return user

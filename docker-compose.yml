@@ -14,4 +14,12 @@ services:
       - SECRET_KEY=your-production-secret-key-change-this
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - ENCRYPTION_KEY=your-secure-encryption-key-change-this-in-production
+      - ENCRYPTION_ENABLED=true
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s

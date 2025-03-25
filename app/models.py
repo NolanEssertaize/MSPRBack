@@ -2,12 +2,16 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timezone
+from app.encryption import EncryptedFieldsMixin, setup_encryption_listeners
 
 Base = declarative_base()
 
+setup_encryption_listeners(Base)
 
-class User(Base):
+class User(EncryptedFieldsMixin, Base):
     __tablename__ = "users"
+
+    __encrypted_fields__ = ['email', 'phone', 'username']
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String)

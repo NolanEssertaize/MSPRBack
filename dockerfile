@@ -1,22 +1,32 @@
 FROM python:3.10-slim
 
-# Définir le répertoire de travail dans le conteneur
+# Set the working directory in the container
 WORKDIR /app
 
-# Copier les fichiers de dépendances
+# Copy dependency files
 COPY requirements.txt .
 
-# Installer les dépendances
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier le reste du code source de l'application
-COPY . .
+# Create a non-root user for security
+RUN adduser --disabled-password --gecos "" appuser
 
-# Créer le répertoire pour les photos
-RUN mkdir -p photos
+# Create directory for photos and fix permissions
+RUN mkdir -p photos && chown -R appuser:appuser /app
 
-# Exposer le port sur lequel s'exécute l'application
+# Copy application code
+COPY --chown=appuser:appuser . .
+
+# Expose port
 EXPOSE 8000
 
-# Commande pour démarrer l'application
+# Switch to non-root user
+USER appuser
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/docs || exit 1
+
+# Start the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

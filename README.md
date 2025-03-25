@@ -1,249 +1,281 @@
 # Plant Care Application
 
 ## Description
-This application is a comprehensive plant care management system built with FastAPI. It allows users to register their plants, request plant care services from botanists, and manage plant care instructions.
+Cette application est un système complet de gestion de soins pour plantes, développé avec FastAPI. Elle permet aux utilisateurs d'enregistrer leurs plantes, de demander des services de soins auprès de botanistes, et de gérer les instructions d'entretien des plantes.
 
-## Features
-- 🌱 **Plant Management**
-  - Register new plants
-  - Upload plant photos
-  - Add care instructions
-  - Track plant locations
+## Fonctionnalités
+- 🌱 **Gestion des plantes**
+  - Enregistrement de nouvelles plantes
+  - Téléchargement de photos de plantes
+  - Ajout d'instructions d'entretien
+  - Suivi des emplacements des plantes
 
-- 👤 **User Management**
-  - User registration and authentication
-  - JWT token-based security
-  - Role-based access (regular users and botanists)
+- 👤 **Gestion des utilisateurs**
+  - Inscription et authentification des utilisateurs
+  - Sécurité basée sur les jetons JWT
+  - Chiffrement des données personnelles
+  - Accès basé sur les rôles (utilisateurs réguliers et botanistes)
 
-- 🤝 **Care Request System**
-  - Create care requests for plants
-  - Match plant owners with botanists
-  - Track care request status
+- 🤝 **Système de demande de soins**
+  - Gestion directe des soins par les botanistes
+  - Suivi des plantes en cours d'entretien
+  - Système de notification des statuts
 
-## Technical Stack
-- **Backend Framework**: FastAPI
-- **Database**: SQLite with SQLAlchemy ORM
-- **Authentication**: JWT tokens
-- **Migration Tool**: Alembic
-- **API Documentation**: Swagger/OpenAPI
-- **Containerization**: Docker and Docker Compose
+- 💬 **Système de commentaires**
+  - Ajout de commentaires sur les plantes
+  - Échange d'informations entre utilisateurs et botanistes
+  - Historique de communication
 
-## Prerequisites
-- Docker and Docker Compose (for containerized deployment)
-- Python 3.10 or higher (for local development)
-- pip (Python package manager)
-- virtualenv (recommended for local development)
+## Stack Technique
+- **Framework Backend**: FastAPI
+- **Base de données**: SQLite avec SQLAlchemy ORM
+- **Authentification**: Jetons JWT
+- **Chiffrement**: Fernet (cryptography)
+- **Migrations**: Alembic
+- **Documentation API**: Swagger/OpenAPI
+- **Conteneurisation**: Docker et Docker Compose
+- **Tests**: Pytest avec base de données réelle
 
-## Installation and Deployment
+## Prérequis
+- Docker et Docker Compose (pour le déploiement conteneurisé)
+- Python 3.10 ou supérieur (pour le développement local)
+- pip (gestionnaire de paquets Python)
+- virtualenv (recommandé pour le développement local)
 
-### Using Docker (Recommended)
+## Installation et déploiement
 
-1. Clone the repository:
+### Utilisation de Docker (Recommandé)
+
+1. Clonez le dépôt:
 ```bash
-git clone [repository-url]
+git clone [url-du-dépôt]
 cd plant-care-app
 ```
 
-2. Configure environment variables:
-   The default configuration is in `docker-compose.yml`. For production, you should change the `SECRET_KEY`.
+2. Configurez les variables d'environnement:
+   La configuration par défaut se trouve dans `docker-compose.yml`. Pour la production, vous devriez changer les clés `SECRET_KEY` et `ENCRYPTION_KEY`.
 
-3. Build and start the Docker containers:
+3. Construisez et démarrez les conteneurs Docker:
 ```bash
 docker-compose up -d
 ```
 
-4. Initialize the database (first time only):
+4. Initialisez la base de données (première fois uniquement):
 ```bash
 docker-compose exec api alembic upgrade head
 ```
 
-5. Access the application:
+5. Accédez à l'application:
    - API: http://localhost:8000
    - Documentation: http://localhost:8000/docs
-   - Alternative documentation: http://localhost:8000/redoc
+   - Documentation alternative: http://localhost:8000/redoc
 
-6. Additional Docker commands:
+6. Commandes Docker supplémentaires:
 
-   - View logs:
+   - Afficher les logs:
    ```bash
    docker-compose logs -f
    ```
 
-   - Stop the application:
+   - Arrêter l'application:
    ```bash
    docker-compose down
    ```
 
-   - Rebuild after changes:
+   - Reconstruire après des modifications:
    ```bash
    docker-compose up --build -d
    ```
 
-### Local Development Setup
+### Configuration du développement local
 
-1. Clone the repository:
+1. Clonez le dépôt:
 ```bash
-git clone [repository-url]
+git clone [url-du-dépôt]
 cd plant-care-app
 ```
 
-2. Create and activate a virtual environment:
+2. Créez et activez un environnement virtuel:
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Sur Windows: .venv\Scripts\activate
 ```
 
-3. Install dependencies:
+3. Installez les dépendances:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Create environment file:
-Create a `.env` file in the root directory with:
+4. Créez le fichier d'environnement:
+Créez un fichier `.env` dans le répertoire racine avec:
 ```env
-DATABASE_URL=sqlite:///plant_care.db
-SECRET_KEY=your-very-secret-key-change-this
+DATABASE_URL=sqlite:///a_rosa_je.db
+SECRET_KEY=votre-clé-très-secrète-à-changer
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+ENCRYPTION_KEY=votre-clé-de-chiffrement-à-changer
+ENCRYPTION_ENABLED=true
 ```
 
-5. Initialize the database:
+5. Initialisez la base de données:
 ```bash
 alembic upgrade head
 ```
 
-6. Start the application:
+6. Démarrez l'application:
 ```bash
 uvicorn app.main:app --reload
 ```
 
-## API Endpoints
+## Points d'API
 
-### Authentication
-- `POST /token` - Get access token
-- `POST /users/` - Create new user
+### Authentification
+- `POST /token` - Obtenir un jeton d'accès
+- `POST /users/` - Créer un nouvel utilisateur
 
-### Plants
-- `POST /plants/` - Create new plant
-- `GET /my_plants/` - List user's plants
-- `GET /all_plants/` - List all plants except user's
-- `PUT /plants/{id}` - Update plant
-- `DELETE /plants/` - Delete plant
+### Utilisateurs
+- `PUT /users/{user_id}` - Mettre à jour un utilisateur
+- `GET /users/me/` - Obtenir les informations de l'utilisateur actuel
+- `DELETE /users/` - Supprimer un utilisateur
 
-### Care Requests
-- `PUT /plants/{plant_id}/start-care` - Start plant care
-- `PUT /plants/{plant_id}/end-care` - End plant care
-- `GET /care-requests/` - List care requests
+### Plantes
+- `POST /plants/` - Créer une nouvelle plante
+- `GET /my_plants/` - Lister les plantes de l'utilisateur
+- `GET /all_plants/` - Lister toutes les plantes sauf celles de l'utilisateur
+- `PUT /plants/{id}` - Mettre à jour une plante
+- `DELETE /plants/` - Supprimer une plante
 
-## Project Structure
+### Soins des plantes
+- `PUT /plants/{plant_id}/start-care` - Commencer à prendre soin d'une plante
+- `PUT /plants/{plant_id}/end-care` - Terminer les soins d'une plante
+- `GET /care-requests/` - Lister les demandes de soins
+
+### Commentaires
+- `POST /comments/` - Créer un commentaire
+- `GET /plants/{plant_id}/comments/` - Obtenir les commentaires d'une plante
+- `PUT /comments/{comment_id}` - Mettre à jour un commentaire
+- `DELETE /comments/{comment_id}` - Supprimer un commentaire
+- `GET /users/{user_id}/comments/` - Obtenir les commentaires d'un utilisateur
+
+## Structure du projet
 ```
 plant_care_app/
-├── alembic/                  # Database migrations
+├── alembic/                  # Migrations de base de données
 │   ├── versions/
 │   └── env.py
-├── app/                      # Application source code
+├── app/                      # Code source de l'application
 │   ├── __init__.py
-│   ├── main.py              # FastAPI application
-│   ├── config.py            # Configuration settings
-│   ├── database.py          # Database connection
-│   ├── models.py            # SQLAlchemy models
-│   ├── schemas.py           # Pydantic models
-│   └── auth.py              # Authentication logic
-├── photos/                   # Uploaded plant photos
-├── requirements.txt          # Project dependencies
-├── alembic.ini              # Alembic configuration
-├── Dockerfile               # Docker image configuration
-├── docker-compose.yml       # Docker Compose configuration
-├── .dockerignore            # Docker build exclusions
-└── .env                     # Environment variables (local dev only)
+│   ├── main.py              # Application FastAPI
+│   ├── config.py            # Paramètres de configuration
+│   ├── database.py          # Connexion à la base de données
+│   ├── models.py            # Modèles SQLAlchemy
+│   ├── schemas.py           # Modèles Pydantic
+│   ├── auth.py              # Logique d'authentification
+│   ├── encryption.py        # Module de chiffrement
+│   └── tests/               # Tests avec base de données réelle
+├── photos/                   # Photos des plantes téléchargées
+├── requirements.txt          # Dépendances du projet
+├── alembic.ini              # Configuration Alembic
+├── Dockerfile               # Configuration d'image Docker
+├── docker-compose.yml       # Configuration Docker Compose
+├── run_tests.sh             # Script d'exécution des tests
+├── .dockerignore            # Exclusions pour la construction Docker
+└── .env                     # Variables d'environnement (dev local uniquement)
 ```
 
-## Docker Configuration Files
+## Sécurité des données
 
-### Dockerfile
-The Dockerfile defines how to build the application container:
-- Uses Python 3.10 slim image
-- Installs dependencies
-- Sets up the application files
-- Configures the container to run the FastAPI server
+### Chiffrement des données personnelles
+Cette application utilise le chiffrement Fernet pour protéger les informations personnelles des utilisateurs:
 
-### docker-compose.yml
-The docker-compose.yml file defines the services and their configuration:
-- API service running the FastAPI application
-- Volume mounts for persistent data (database and photos)
-- Port forwarding (8000:8000)
-- Environment variables configuration
+- Les données chiffrées incluent:
+  - Adresses email
+  - Numéros de téléphone
+  - Noms d'utilisateur
 
-### .dockerignore
-Specifies which files should be excluded when building the Docker image to keep it clean and efficient.
+- Avantages du chiffrement:
+  - Protection contre les accès non autorisés à la base de données
+  - Conformité améliorée avec les réglementations sur la protection des données (RGPD)
+  - Risque réduit en cas de violation de données
 
-## Development
-
-### Adding New Features
-1. Create new models in `app/models.py`
-2. Create corresponding schemas in `app/schemas.py`
-3. Add new endpoints in `app/main.py`
-4. Create database migrations:
-```bash
-alembic revision --autogenerate -m "Description of changes"
-alembic upgrade head
+### Configuration du chiffrement
+Le chiffrement est configuré via les variables d'environnement:
+```env
+ENCRYPTION_KEY=votre-clé-de-chiffrement-sécurisée
+ENCRYPTION_ENABLED=true
 ```
 
-### Code Style
-- Follow PEP 8 guidelines
-- Use type hints
-- Document functions and classes
-- Keep functions focused and small
+## Tests
 
-## Testing
+L'application utilise Pytest avec une base de données réelle pour des tests complets:
 
-Run the test suite with:
 ```bash
-pytest
+# Exécuter tous les tests
+./run_tests.sh
+
+# Exécuter les tests dans Docker
+./run_tests.sh --docker
 ```
 
-With Docker:
+Les tests couvrent:
+- Authentification des utilisateurs
+- Opérations CRUD sur les plantes
+- Système de commentaires
+- Chiffrement et déchiffrement des données
+
+## Notes de sécurité
+- Changez les clés `SECRET_KEY` et `ENCRYPTION_KEY` par défaut en production
+- Utilisez HTTPS en production
+- Implémentez la limitation de débit pour une utilisation en production
+- Mettez régulièrement à jour les dépendances
+
+## Sauvegarde et maintenance
+
+### Sauvegarde des données
+L'application utilise des volumes pour conserver les données en dehors du conteneur:
+- Fichier de base de données (`a_rosa_je.db`)
+- Répertoire des photos de plantes (`photos/`)
+
+Pour sauvegarder vos données, copiez simplement ces fichiers depuis la machine hôte.
+
+### Migrations de base de données
+Après avoir modifié les modèles, créez et appliquez les migrations:
+
+Avec Docker:
 ```bash
-docker-compose exec api pytest
-```
-
-## Security Notes
-- Change the default SECRET_KEY in production
-- Use HTTPS in production
-- Implement rate limiting for production use
-- Regularly update dependencies
-
-## Backup and Maintenance
-
-### Data Backup
-The application uses volumes to persist data outside the container:
-- Database file (`a_rosa_je.db`)
-- Plant photos directory (`photos/`)
-
-To backup your data, simply copy these files from the host machine.
-
-### Database Migrations
-After making model changes, create and apply migrations:
-
-With Docker:
-```bash
-docker-compose exec api alembic revision --autogenerate -m "Description of changes"
+docker-compose exec api alembic revision --autogenerate -m "Description des changements"
 docker-compose exec api alembic upgrade head
 ```
 
-## Troubleshooting
+## Dépannage
 
-### Common Issues
-- **Database Connection Issues**: Verify the database file exists and has proper permissions
-- **Photo Upload Failures**: Check the photos directory exists and has write permissions
-- **Authentication Errors**: Verify your token hasn't expired (default is 30 minutes)
+### Problèmes courants
+- **Problèmes de connexion à la base de données**: Vérifiez que le fichier de base de données existe et a les permissions appropriées
+- **Échecs de téléchargement de photos**: Vérifiez que le répertoire photos existe et a les permissions d'écriture
+- **Erreurs d'authentification**: Vérifiez que votre jeton n'a pas expiré (par défaut 30 minutes)
+- **Problèmes de chiffrement**: Assurez-vous que la clé de chiffrement est cohérente et correctement configurée
 
-### Docker Specific
-- **Container Won't Start**: Check logs with `docker-compose logs -f api`
-- **Volume Mount Issues**: Verify path in docker-compose.yml and directory permissions
+### Spécifique à Docker
+- **Le conteneur ne démarre pas**: Vérifiez les logs avec `docker-compose logs -f api`
+- **Problèmes de montage de volume**: Vérifiez le chemin dans docker-compose.yml et les permissions du répertoire
 
-## License
-[Your License Here]
+### Réinitialisation de la base de données
+Si vous rencontrez des problèmes de migration complexes, vous pouvez réinitialiser complètement la base de données:
+
+```bash
+# Arrêtez l'application
+docker-compose down
+
+# Supprimez la base de données
+rm a_rosa_je.db
+
+# Redémarrez et recréez la base de données
+docker-compose up -d
+docker-compose exec api alembic upgrade head
+```
+
+## Licence
+[Votre licence ici]
 
 ## Contact
-[Your Contact Information]
+[Vos informations de contact]
