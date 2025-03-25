@@ -274,8 +274,5 @@ docker-compose up -d
 docker-compose exec api alembic upgrade head
 ```
 
-## Licence
-[Votre licence ici]
-
 ## Contact
-[Vos informations de contact]
+Nolan Essertaize
