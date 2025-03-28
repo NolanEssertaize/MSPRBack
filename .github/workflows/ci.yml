@@ -4,26 +4,109 @@ on:
   push:
     branches: [ main, master, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
+  # Permet d'exécuter le workflow manuellement depuis l'interface GitHub
+  workflow_dispatch:
+
+# Définition des variables d'environnement globales
+env:
+  PYTHON_VERSION: '3.10'
+  DOCKER_IMAGE: plant-care-app
+  CACHE_KEY: pip-dependencies-${{ hashFiles('requirements.txt') }}
 
 jobs:
-  test:
+  lint:
+    name: Analyse statique du code
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout du code
+      uses: actions/checkout@v4
     
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: Configuration de Python
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
-        
-    - name: Install dependencies
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Installation des dépendances de linting
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort
+    
+    - name: Vérification avec Flake8
+      run: |
+        flake8 app --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Pour les avertissements, mais sans échec
+        flake8 app --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+    
+    - name: Vérification du formatage avec Black
+      run: |
+        black --check app
+      continue-on-error: true  # Ne pas échouer le pipeline pour des problèmes de formatage
+    
+    - name: Vérification des imports avec isort
+      run: |
+        isort --check-only --profile black app
+      continue-on-error: true
+
+  unit-tests:
+    name: Tests unitaires
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+    
+    - name: Configuration de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Installation des dépendances
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        
-    - name: Run tests
+        pip install pytest pytest-cov
+    
+    - name: Exécution des tests unitaires
+      run: |
+        mkdir -p photos  # S'assure que le dossier photos existe
+        pytest app/tests/ --cov=app --cov-report=xml -v
+      env:
+        TESTING: true
+        ENCRYPTION_ENABLED: true
+        ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+    
+    - name: Téléversement du rapport de couverture
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false
+
+  tests:
+    name: Tests end-to-end
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+    
+    - name: Configuration de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Installation des dépendances
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Exécution des tests end-to-end
       run: |
         chmod +x run_tests.sh
         ./run_tests.sh
@@ -31,40 +114,112 @@ jobs:
         TESTING: true
         ENCRYPTION_ENABLED: true
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-        
-  docker-test:
+
+  docker-build-test:
+    name: Tests avec Docker
     runs-on: ubuntu-latest
+    needs: unit-tests
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout du code
+      uses: actions/checkout@v4
     
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-      
-    - name: Run Docker tests
+    - name: Configuration de Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Mise en cache des couches Docker
+      uses: actions/cache@v3
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    
+    - name: Build de l'image Docker
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: false
+        load: true
+        tags: ${{ env.DOCKER_IMAGE }}:test
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+    
+    - name: Déplacement du cache
       run: |
-        chmod +x run_tests.sh
-        ./run_tests.sh --docker
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+    
+    - name: Exécution des tests dans Docker
+      run: |
+        docker-compose -f docker-compose.yml -f docker-compose.test.yml up --abort-on-container-exit
       env:
         ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-        
-  build-and-push:
-    needs: [test, docker-test]
+
+  security-scan:
+    name: Analyse de sécurité
     runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+    - name: Checkout du code
+      uses: actions/checkout@v4
+    
+    - name: Configuration de Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Installation des outils de sécurité
+      run: |
+        python -m pip install --upgrade pip
+        pip install bandit safety
+    
+    - name: Analyse avec Bandit
+      run: |
+        bandit -r app -x app/tests
+        
+    - name: Vérification des dépendances avec Safety
+      run: |
+        safety check -r requirements.txt
+
+  build-and-push:
+    name: Build et déploiement
+    runs-on: ubuntu-latest
+    needs: [tests, docker-build-test, security-scan]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout du code
+      uses: actions/checkout@v4
     
-    - name: Login to Docker Hub
-      uses: docker/login-action@v2
+    - name: Configuration de Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Login à Docker Hub
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
-        
-    - name: Build and push
-      uses: docker/build-push-action@v4
+    
+    - name: Extraction des métadonnées
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.DOCKER_IMAGE }}
+        tags: |
+          type=semver,pattern={{version}}
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix=
+          latest
+    
+    - name: Build et push vers Docker Hub
+      uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ${{ secrets.DOCKERHUB_USERNAME }}/plant-care-app:latest,${{ secrets.DOCKERHUB_USERNAME }}/plant-care-app:${{ github.sha }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
