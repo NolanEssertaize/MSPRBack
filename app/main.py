@@ -8,7 +8,7 @@ from pydantic import EmailStr
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import List
-from app import schemas, auth, models
+from app import schemas, auth, models, security
 from app.database import engine, get_db
 from app.config import settings
 
@@ -76,35 +76,51 @@ async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
 
 @app.post("/users/", response_model=schemas.User, tags=["Users"])
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """
-        Create a new user account.
-
-        Parameters:
-        - user: User creation schema containing:
-            - email: User's email address
-            - password: User's password
-            - is_botanist: Boolean indicating if user is a botanist
-
-        Returns:
-        - User object with created user details
-
-        Raises:
-        - 400: If email is already registered
-    """
-    db_user = db.query(models.User).filter(models.User.email == user.email).first()
+    """Créer un nouvel utilisateur avec hashage et chiffrement des données sensibles"""
+    
+    # Vérifier l'unicité de l'email en utilisant le hash
+    email_hash = security.security_manager.hash_value(user.email)
+    db_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
-    hashed_password = auth.get_password_hash(user.password)
+    
+    # Vérifier l'unicité du nom d'utilisateur en utilisant le hash
+    username_hash = security.security_manager.hash_value(user.username)
+    db_user = db.query(models.User).filter(models.User.username_hash == username_hash).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Username already taken")
+    
+    # Créer l'utilisateur avec versions hashées et chiffrées
     db_user = models.User(
-        username=user.username,
-        email=user.email, 
-        phone=user.phone,
-        hashed_password=hashed_password, 
-        is_botanist=user.is_botanist)
+        # Versions hashées pour recherche et unicité
+        email_hash=email_hash,
+        username_hash=username_hash,
+        phone_hash=security.security_manager.hash_value(user.phone),
+        
+        # Versions chiffrées pour stockage
+        email_encrypted=security.security_manager.encrypt_value(user.email),
+        username_encrypted=security.security_manager.encrypt_value(user.username),
+        phone_encrypted=security.security_manager.encrypt_value(user.phone),
+        
+        # Autres champs
+        hashed_password=auth.get_password_hash(user.password),
+        is_botanist=user.is_botanist,
+        is_active=True
+    )
+    
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
-    return db_user
+    
+    # Transformer le modèle DB en schéma de réponse avec les valeurs déchiffrées
+    return {
+        "id": db_user.id,
+        "email": security_manager.decrypt_value(db_user.email_encrypted),
+        "username": security_manager.decrypt_value(db_user.username_encrypted),
+        "phone": security_manager.decrypt_value(db_user.phone_encrypted),
+        "is_active": db_user.is_active,
+        "is_botanist": db_user.is_botanist
+    }
 
 @app.put("/users/{user_id}", tags=["Users"])
 async def edit_user(

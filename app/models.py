@@ -2,30 +2,70 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timezone
-from app.encryption import EncryptedFieldsMixin, setup_encryption_listeners
+from app.security import security_manager
 
 Base = declarative_base()
 
-setup_encryption_listeners(Base)
-
-class User(EncryptedFieldsMixin, Base):
+class User(Base):
     __tablename__ = "users"
 
-    __encrypted_fields__ = ['email', 'phone', 'username']
-
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String)
-    phone = Column(String)
-    email = Column(String, unique=True, index=True)
+    
+    # Champs email avec version hachée (pour recherche/unicité) et version chiffrée (pour stockage)
+    email_hash = Column(String(64), unique=True, index=True)
+    email_encrypted = Column(String(500))
+    
+    # Champs username avec les deux versions
+    username_hash = Column(String(64), unique=True, index=True)
+    username_encrypted = Column(String(500))
+    
+    # Champs phone avec les deux versions
+    phone_hash = Column(String(64), index=True)
+    phone_encrypted = Column(String(500))
+    
+    # Autres champs non sensibles
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_botanist = Column(Boolean, default=False)
+    
+    # Relations
     owned_plants = relationship("Plant",
-                                back_populates="owner",
-                                foreign_keys="[Plant.owner_id]")
+                               back_populates="owner",
+                               foreign_keys="[Plant.owner_id]")
     comments = relationship("Comment", 
-                        back_populates="user",
-                        cascade="all, delete-orphan")
+                           back_populates="user",
+                           cascade="all, delete-orphan")
+    
+    # Properties pour faciliter l'accès aux données déchiffrées
+    @property
+    def email(self):
+        return security_manager.decrypt_value(self.email_encrypted) if self.email_encrypted else None
+    
+    @email.setter
+    def email(self, value):
+        if value is not None:
+            self.email_hash = security_manager.hash_value(value)
+            self.email_encrypted = security_manager.encrypt_value(value)
+    
+    @property
+    def username(self):
+        return security_manager.decrypt_value(self.username_encrypted) if self.username_encrypted else None
+    
+    @username.setter
+    def username(self, value):
+        if value is not None:
+            self.username_hash = security_manager.hash_value(value)
+            self.username_encrypted = security_manager.encrypt_value(value)
+    
+    @property
+    def phone(self):
+        return security_manager.decrypt_value(self.phone_encrypted) if self.phone_encrypted else None
+    
+    @phone.setter
+    def phone(self, value):
+        if value is not None:
+            self.phone_hash = security_manager.hash_value(value)
+            self.phone_encrypted = security_manager.encrypt_value(value)
 
 
 class Plant(Base):
@@ -40,6 +80,7 @@ class Plant(Base):
     created_at = Column(DateTime, default=datetime.now(timezone.utc))
     in_care_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     plant_sitting = Column(Integer, ForeignKey("users.id"), nullable=True)
+    
     owner = relationship("User",
                         foreign_keys=[owner_id],
                         back_populates="owned_plants",
@@ -51,6 +92,16 @@ class Plant(Base):
                           back_populates="plant",
                           cascade="all, delete-orphan")
     
+    # Propriétés pour déterminer le statut de soin
+    @property
+    def in_care(self):
+        return self.in_care_id is not None
+    
+    @property
+    def plant_sitting_user(self):
+        return self.sitter
+
+
 class Comment(Base):
     __tablename__ = "commentary" 
 

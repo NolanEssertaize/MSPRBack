@@ -8,8 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
 from app.config import settings
-from app import models
-from app.encryption import encrypt_text, decrypt_text, search_encrypted_field
+from app import models, security
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -32,14 +31,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def get_user_by_email(db: Session, email: str):
     """
-    Find a user by email, handling encrypted email fields.
-    This function uses the search_encrypted_field utility to search through encrypted emails.
+    Trouve un utilisateur par email, en utilisant le hash pour la recherche
     """
-    # Since email is encrypted, we need to use our custom search function
-    matching_users = search_encrypted_field(models.User, db, 'email', email, exact_match=True)
-    if matching_users:
-        return matching_users[0]
-    return None
+    email_hash = security.security_manager.hash_value(email)
+    return db.query(models.User).filter(models.User.email_hash == email_hash).first()
+
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
