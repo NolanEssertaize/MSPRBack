@@ -415,7 +415,7 @@ async def list_plants_users_plant(
        Requires:
        - Valid JWT token in Authorization header
    """
-    plants = db.query(models.Plant).filter(models.Plant.owner == current_user).all()
+    plants = db.query(models.Plant).filter(models.Plant.owner_id == current_user.id).all()
     for plant in plants:
         photofile = plant.photo_url
         if plant.photo_url:
