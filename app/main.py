@@ -8,7 +8,8 @@ from pydantic import EmailStr
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from typing import List
-from app import schemas, auth, models, security
+from app import schemas, auth, models
+from app.security import security_manager
 from app.database import engine, get_db
 from app.config import settings
 
@@ -44,33 +45,40 @@ async def preflight_handler():
 @app.post("/token", tags=["Authentication"])
 async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
     """
-        Authenticate a user and return a JWT token.
+    Authentifie un utilisateur et renvoie un jeton JWT.
 
-        Parameters:
-        - form_data: OAuth2 password request form containing:
-            - username: User's email
-            - password: User's password
+    Parameters:
+    - form_data: Formulaire de demande OAuth2 contenant :
+        - username: Email de l'utilisateur
+        - password: Mot de passe de l'utilisateur
 
-        Returns:
-        - access_token: JWT token for authentication
-        - token_type: Type of token (bearer)
+    Returns:
+    - access_token: Jeton JWT pour l'authentification
+    - token_type: Type de jeton (bearer)
 
-        Raises:
-        - 401: If email or password is incorrect
-        """
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    Raises:
+    - 401: Si l'email ou le mot de passe est incorrect
+    """
+    # Recherchons l'utilisateur par son email en utilisant le hash
+    email_hash = security_manager.hash_value(form_data.username)
+    user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
+    
+    # Vérifions si l'utilisateur existe et si le mot de passe est correct
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Générons le jeton d'accès avec l'email déchiffré comme identifiant
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
-        data={"sub": user.email}, expires_delta=access_token_expires
+        data={"sub": security_manager.decrypt_value(user.email_encrypted)}, 
+        expires_delta=access_token_expires
     )
+    
     return {"access_token": access_token, "token_type": "bearer"}
-
 
 # ======= USER MANAGEMENT =======
 
@@ -79,13 +87,13 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     """Créer un nouvel utilisateur avec hashage et chiffrement des données sensibles"""
     
     # Vérifier l'unicité de l'email en utilisant le hash
-    email_hash = security.security_manager.hash_value(user.email)
+    email_hash = security_manager.hash_value(user.email)
     db_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Vérifier l'unicité du nom d'utilisateur en utilisant le hash
-    username_hash = security.security_manager.hash_value(user.username)
+    username_hash = security_manager.hash_value(user.username)
     db_user = db.query(models.User).filter(models.User.username_hash == username_hash).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already taken")
@@ -95,12 +103,12 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         # Versions hashées pour recherche et unicité
         email_hash=email_hash,
         username_hash=username_hash,
-        phone_hash=security.security_manager.hash_value(user.phone),
+        phone_hash=security_manager.hash_value(user.phone),
         
         # Versions chiffrées pour stockage
-        email_encrypted=security.security_manager.encrypt_value(user.email),
-        username_encrypted=security.security_manager.encrypt_value(user.username),
-        phone_encrypted=security.security_manager.encrypt_value(user.phone),
+        email_encrypted=security_manager.encrypt_value(user.email),
+        username_encrypted=security_manager.encrypt_value(user.username),
+        phone_encrypted=security_manager.encrypt_value(user.phone),
         
         # Autres champs
         hashed_password=auth.get_password_hash(user.password),
@@ -122,63 +130,86 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
         "is_botanist": db_user.is_botanist
     }
 
-@app.put("/users/{user_id}", tags=["Users"])
+@app.put("/users/{user_id}", response_model=schemas.User, tags=["Users"])
 async def edit_user(
     user_id: int,  
     email: EmailStr = None,
     username: str = None,
     phone: str = None,
     is_botanist: bool = None, 
-    current_user: models.User = Depends(auth.get_current_user),
+    current_user: dict = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Update an existing user account.
+    Met à jour un compte utilisateur existant.
 
     Parameters:
-    - user_id: ID of the user to update
-    - email: User's new email address (optional)
-    - username: User's new username (optional)
-    - phone: User's new phone number (optional)
-    - is_botanist: Boolean indicating if user is a botanist (optional)
+    - user_id: ID de l'utilisateur à mettre à jour
+    - email: Nouvelle adresse email de l'utilisateur (optionnel)
+    - username: Nouveau nom d'utilisateur (optionnel)
+    - phone: Nouveau numéro de téléphone (optionnel)
+    - is_botanist: Booléen indiquant si l'utilisateur est un botaniste (optionnel)
 
     Returns:
-    - Updated user object
+    - Objet utilisateur mis à jour
 
     Raises:
-    - 404: If user is not found
-    - 400: If email is already registered by another user
-    - 403: If trying to update another user without proper permissions
+    - 404: Si l'utilisateur n'est pas trouvé
+    - 400: Si l'email est déjà enregistré par un autre utilisateur
+    - 403: Si on tente de mettre à jour un autre utilisateur sans les permissions adéquates
     """
-    # Check if user is trying to update someone else's profile
-    if user_id != current_user.id:
+    # Vérifier si l'utilisateur essaie de mettre à jour le profil de quelqu'un d'autre
+    if user_id != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized to update other users")
         
-    # Get the user to update
+    # Récupérer l'utilisateur à mettre à jour
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Check if the new email is already taken by someone else
-    if email and email != db_user.email:
-        existing_user = db.query(models.User).filter(models.User.email == email).first()
+    # Vérifier si le nouvel email est déjà pris par quelqu'un d'autre
+    if email and email != current_user["email"]:
+        email_hash = security_manager.hash_value(email)
+        existing_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
         if existing_user and existing_user.id != user_id:
             raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Update user fields
+    # Vérifier si le nouveau nom d'utilisateur est déjà pris
+    if username and username != current_user["username"]:
+        username_hash = security_manager.hash_value(username)
+        existing_user = db.query(models.User).filter(models.User.username_hash == username_hash).first()
+        if existing_user and existing_user.id != user_id:
+            raise HTTPException(status_code=400, detail="Username already taken")
+    
+    # Mettre à jour les champs de l'utilisateur
     if email is not None:
-        db_user.email = email
+        db_user.email_hash = security_manager.hash_value(email)
+        db_user.email_encrypted = security_manager.encrypt_value(email)
+    
     if username is not None:
-        db_user.username = username
+        db_user.username_hash = security_manager.hash_value(username)
+        db_user.username_encrypted = security_manager.encrypt_value(username)
+    
     if phone is not None:
-        db_user.phone = phone
+        db_user.phone_hash = security_manager.hash_value(phone)
+        db_user.phone_encrypted = security_manager.encrypt_value(phone)
+    
     if is_botanist is not None:
         db_user.is_botanist = is_botanist
     
-    # Commit changes
+    # Enregistrer les modifications
     db.commit()
     db.refresh(db_user)
-    return db_user
+    
+    # Retourner les données déchiffrées
+    return {
+        "id": db_user.id,
+        "email": security_manager.decrypt_value(db_user.email_encrypted),
+        "username": security_manager.decrypt_value(db_user.username_encrypted),
+        "phone": security_manager.decrypt_value(db_user.phone_encrypted),
+        "is_active": db_user.is_active,
+        "is_botanist": db_user.is_botanist
+    }
 
 @app.get("/users/me/", tags=["Users"])
 async def read_users_me(current_user: models.User = Depends(auth.get_current_user)):

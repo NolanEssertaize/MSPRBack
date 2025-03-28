@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
 from app.config import settings
-from app import models, security
+from app import models
+from app.security import security_manager
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -33,17 +34,24 @@ def get_user_by_email(db: Session, email: str):
     """
     Trouve un utilisateur par email, en utilisant le hash pour la recherche
     """
-    email_hash = security.security_manager.hash_value(email)
+    email_hash = security_manager.hash_value(email)
     return db.query(models.User).filter(models.User.email_hash == email_hash).first()
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    """
+    Récupère l'utilisateur courant à partir du token JWT.
+    
+    La fonction décode le token, extrait l'email, puis cherche l'utilisateur
+    correspondant dans la base de données en utilisant le hash de l'email.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        # Décodage du token JWT
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
@@ -51,11 +59,22 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     
-    # Get user with encrypted email
-    user = get_user_by_email(db, email)
+    # Recherche de l'utilisateur par hash d'email
+    email_hash = security_manager.hash_value(email)
+    user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
+    
     if user is None:
         raise credentials_exception
-    return user
+    
+    # Création d'un dictionnaire contenant les informations déchiffrées
+    return {
+        "id": user.id,
+        "email": security_manager.decrypt_value(user.email_encrypted),
+        "username": security_manager.decrypt_value(user.username_encrypted),
+        "phone": security_manager.decrypt_value(user.phone_encrypted),
+        "is_active": user.is_active,
+        "is_botanist": user.is_botanist
+    }
 
 def authenticate_user(db: Session, email: str, password: str):
     """Authenticate a user with email and password, handling encrypted fields."""
