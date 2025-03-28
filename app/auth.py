@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from app.database import get_db
 from app.config import settings
-from app import models
+from app import models, schemas
 from app.security import security_manager
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -67,14 +67,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     
     # Création d'un dictionnaire contenant les informations déchiffrées
-    return {
-        "id": user.id,
-        "email": security_manager.decrypt_value(user.email_encrypted),
-        "username": security_manager.decrypt_value(user.username_encrypted),
-        "phone": security_manager.decrypt_value(user.phone_encrypted),
-        "is_active": user.is_active,
-        "is_botanist": user.is_botanist
-    }
+    return schemas.User(
+        id=user.id,
+        email=security_manager.decrypt_value(user.email_encrypted),
+        username= security_manager.decrypt_value(user.username_encrypted),
+        phone=security_manager.decrypt_value(user.phone_encrypted),
+        is_active=user.is_active,
+        is_botanist=user.is_botanist
+    )
 
 def authenticate_user(db: Session, email: str, password: str):
     """Authenticate a user with email and password, handling encrypted fields."""

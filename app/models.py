@@ -11,24 +11,19 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     
-    # Champs email avec version hachée (pour recherche/unicité) et version chiffrée (pour stockage)
     email_hash = Column(String(64), unique=True, index=True)
     email_encrypted = Column(String(500))
     
-    # Champs username avec les deux versions
     username_hash = Column(String(64), unique=True, index=True)
     username_encrypted = Column(String(500))
     
-    # Champs phone avec les deux versions
     phone_hash = Column(String(64), index=True)
     phone_encrypted = Column(String(500))
     
-    # Autres champs non sensibles
     hashed_password = Column(String)
     is_active = Column(Boolean, default=True)
     is_botanist = Column(Boolean, default=False)
     
-    # Relations
     owned_plants = relationship("Plant",
                                back_populates="owner",
                                foreign_keys="[Plant.owner_id]")
@@ -36,7 +31,6 @@ class User(Base):
                            back_populates="user",
                            cascade="all, delete-orphan")
     
-    # Properties pour faciliter l'accès aux données déchiffrées
     @property
     def email(self):
         return security_manager.decrypt_value(self.email_encrypted) if self.email_encrypted else None
@@ -92,7 +86,6 @@ class Plant(Base):
                           back_populates="plant",
                           cascade="all, delete-orphan")
     
-    # Propriétés pour déterminer le statut de soin
     @property
     def in_care(self):
         return self.in_care_id is not None
@@ -109,6 +102,7 @@ class Comment(Base):
     plant_id = Column(Integer, ForeignKey("plants.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     comment = Column(String, nullable=False)
+    time_stamp = Column(DateTime, nullable=False)
     
     user = relationship("User", back_populates="comments")
     plant = relationship("Plant", back_populates="comments")

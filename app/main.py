@@ -1,5 +1,6 @@
 import os
 import fastapi.responses
+from datetime import datetime as dt
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm
@@ -137,7 +138,7 @@ async def edit_user(
     username: str = None,
     phone: str = None,
     is_botanist: bool = None, 
-    current_user: dict = Depends(auth.get_current_user),
+    current_user: schemas.User = Depends(auth.get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -159,7 +160,7 @@ async def edit_user(
     - 403: Si on tente de mettre à jour un autre utilisateur sans les permissions adéquates
     """
     # Vérifier si l'utilisateur essaie de mettre à jour le profil de quelqu'un d'autre
-    if user_id != current_user["id"]:
+    if user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update other users")
         
     # Récupérer l'utilisateur à mettre à jour
@@ -168,14 +169,14 @@ async def edit_user(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Vérifier si le nouvel email est déjà pris par quelqu'un d'autre
-    if email and email != current_user["email"]:
+    if email and email != current_user.email:
         email_hash = security_manager.hash_value(email)
         existing_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
         if existing_user and existing_user.id != user_id:
             raise HTTPException(status_code=400, detail="Email already registered")
     
     # Vérifier si le nouveau nom d'utilisateur est déjà pris
-    if username and username != current_user["username"]:
+    if username and username != current_user.username:
         username_hash = security_manager.hash_value(username)
         existing_user = db.query(models.User).filter(models.User.username_hash == username_hash).first()
         if existing_user and existing_user.id != user_id:
@@ -542,7 +543,8 @@ async def create_comment(
     db_comment = models.Comment(
         plant_id=plant_id,
         user_id=current_user.id,
-        comment=comment
+        comment=comment,
+        time_stamp=dt.now()
     )
     
     db.add(db_comment)
