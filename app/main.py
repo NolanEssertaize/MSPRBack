@@ -436,7 +436,7 @@ async def list_all_plants_except_users(
        Requires:
        - Valid JWT token in Authorization header
    """
-    plants = db.query(models.Plant).filter(models.Plant.owner != current_user).all()
+    plants = db.query(models.Plant).filter(models.Plant.owner_id != current_user.id).all()
     for plant in plants:
         photofile = plant.photo_url
         if plant.photo_url:
@@ -499,7 +499,7 @@ async def list_care_requests(
         db: Session = Depends(get_db)
 ):
     care_requests = db.query(models.Plant).filter(
-        models.Plant.in_care == True
+        models.Plant.in_care_id != None
     ).filter(
         models.Plant.owner_id != current_user.id
     ).all()
