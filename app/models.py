@@ -78,7 +78,7 @@ class Plant(Base):
     owner = relationship("User",
                         foreign_keys=[owner_id],
                         back_populates="owned_plants",
-                        lazy="noload")
+                        lazy="joined")
     sitter = relationship("User",
                          foreign_keys=[plant_sitting],
                          primaryjoin="Plant.plant_sitting == User.id")
