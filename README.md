@@ -98,7 +98,7 @@ cd plant-care-app
 2. Créez et activez un environnement virtuel:
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Sur Windows: .venv\Scripts\activate
+source .\.venv/bin/activate  # Sur Windows: .venv\Scripts\activate
 ```
 
 3. Installez les dépendances:
