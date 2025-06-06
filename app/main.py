@@ -13,12 +13,14 @@ from app import schemas, auth, models
 from app.security import security_manager
 from app.database import engine, get_db
 from app.config import settings
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 base_url = "localhost:8000"
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="A_rosa_je API")
 os.makedirs("photos", exist_ok=True)
+FastAPIInstrumentor.instrument_app(app)
 
 app.mount("/photos", StaticFiles(directory="photos"), name="photos")
 
