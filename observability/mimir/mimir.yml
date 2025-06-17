@@ -1,109 +1,22 @@
-# Configuration Mimir pour Plant Care Application
+# Configuration Mimir ultra-simplifiée
 multitenancy_enabled: false
 
 server:
   http_listen_port: 9009
-  grpc_listen_port: 9095
 
-# Configuration du distributeur
-distributor:
-  pool:
-    health_check_ingesters: true
-
-# Configuration de l'ingester
-ingester:
-  ring:
-    final_sleep: 0s
-    num_tokens: 512
-    kvstore:
-      store: memberlist
-    replication_factor: 1
-
-# Configuration du memberlist
-memberlist:
-  abort_if_cluster_join_fails: false
-  bind_port: 7946
-  join_members:
-    - mimir:7946
-
-# Configuration des blocs de stockage
 blocks_storage:
   backend: filesystem
   filesystem:
     dir: /data/blocks
-  bucket_store:
-    sync_dir: /data/tsdb-sync
-    index_cache:
-      backend: inmemory
-      inmemory:
-        max_size_bytes: 1073741824
-    chunks_cache:
-      backend: inmemory
-      inmemory:
-        max_size_bytes: 1073741824
-    metadata_cache:
-      backend: inmemory
-      inmemory:
-        max_size_bytes: 268435456
 
-# Configuration du compacteur
-compactor:
-  data_dir: /data/compactor
-  sharding_ring:
-    kvstore:
-      store: memberlist
-
-# Configuration du store-gateway
-store_gateway:
-  sharding_ring:
-    replication_factor: 1
-    kvstore:
-      store: memberlist
-
-# Configuration du ruler
-ruler:
-  rule_path: /data/rules
+ingester:
   ring:
     kvstore:
-      store: memberlist
-
-# Configuration de l'alertmanager
-alertmanager:
-  data_dir: /data/alertmanager
-  external_url: http://alertmanager:9093
-  sharding_ring:
+      store: inmemory
     replication_factor: 1
-    kvstore:
-      store: memberlist
 
-# Configuration du query-frontend
-frontend:
-  log_queries_longer_than: 10s
-  compress_responses: true
-  max_cache_freshness: 10m
-
-# Configuration du querier
-querier:
-  max_concurrent: 20
-
-# Limites par défaut
 limits:
-  max_global_series_per_user: 150000
-  max_global_series_per_metric: 20000
   ingestion_rate: 10000
-  ingestion_burst_size: 200000
-  max_samples_per_query: 1000000
-  max_series_per_query: 100000
 
-# Configuration d'usage stats
 usage_stats:
   enabled: false
-
-# Configuration des API
-api:
-  prometheus_http_prefix: /prometheus
-  response_compression_enabled: true
-
-# Configuration du runtime
-runtime_config:
-  file: /data/runtime.yml
