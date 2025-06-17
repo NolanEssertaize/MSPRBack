@@ -1,0 +1,298 @@
+// Configuration Grafana Alloy pour Plant Care Application
+
+// =====================================================
+// DÉCOUVERTE DES SERVICES
+// =====================================================
+
+// Découverte des conteneurs Docker
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+
+  filter {
+    name   = "label"
+    values = ["observability=enabled"]
+  }
+}
+
+// =====================================================
+// COLLECTE DES LOGS
+// =====================================================
+
+// Logs des conteneurs Docker
+loki.source.docker "docker_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.containers.targets
+
+  forward_to = [loki.process.plant_care.receiver]
+
+  relabel_rules = loki.relabel.docker_logs.rules
+}
+
+// Relabeling pour les logs Docker
+loki.relabel "docker_logs" {
+  forward_to = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_image"]
+    target_label  = "image"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+// Logs système
+loki.source.file "system_logs" {
+  targets = [
+    {__path__ = "/var/log/syslog", job = "syslog"},
+    {__path__ = "/var/log/auth.log", job = "auth"},
+  ]
+
+  forward_to = [loki.process.plant_care.receiver]
+}
+
+// Traitement des logs
+loki.process "plant_care" {
+  forward_to = [loki.write.default.receiver]
+
+  stage.json {
+    expressions = {
+      level     = "level",
+      timestamp = "timestamp",
+      message   = "message",
+      service   = "service",
+    }
+  }
+
+  stage.labels {
+    values = {
+      level   = "",
+      service = "",
+    }
+  }
+
+  stage.output {
+    source = "message"
+  }
+}
+
+// Écriture vers Loki
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// =====================================================
+// COLLECTE DES MÉTRIQUES
+// =====================================================
+
+// Métriques des conteneurs Docker
+prometheus.scrape "docker_containers" {
+  targets    = discovery.docker.containers.targets
+  forward_to = [prometheus.relabel.docker_metrics.receiver]
+
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+}
+
+// Relabeling pour les métriques Docker
+prometheus.relabel "docker_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+// Métriques de l'application FastAPI
+prometheus.scrape "fastapi_app" {
+  targets = [{"__address__" = "api:8000"}]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "plant-care-api"
+    },
+  ]
+}
+
+// Métriques PostgreSQL
+prometheus.scrape "postgres" {
+  targets = [{"__address__" = "postgres:5432"}]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "30s"
+  metrics_path    = "/metrics"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "postgres"
+    },
+  ]
+}
+
+// Écriture vers Mimir
+prometheus.remote_write "default" {
+  endpoint {
+    url = "http://mimir:9009/api/v1/push"
+  }
+}
+
+// =====================================================
+// COLLECTE DES TRACES
+// =====================================================
+
+// Réception des traces OTLP
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    metrics = [prometheus.remote_write.default.receiver]
+    logs    = [loki.write.default.receiver]
+  }
+}
+
+// Traitement en lot des traces
+otelcol.processor.batch "default" {
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Export vers Tempo
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "http://tempo:9095"
+    tls {
+      insecure = true
+    }
+  }
+}
+
+// =====================================================
+// MÉTRIQUES SYSTÈME
+// =====================================================
+
+// Métriques du système hôte
+prometheus.exporter.unix "system" {
+  include_exporter_metrics = true
+}
+
+prometheus.scrape "system_metrics" {
+  targets    = prometheus.exporter.unix.system.targets
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "system"
+    },
+  ]
+}
+
+// =====================================================
+// MONITORING DU STACK LGTM
+// =====================================================
+
+// Monitoring de Loki
+prometheus.scrape "loki" {
+  targets = [{"__address__" = "loki:3100"}]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "loki"
+    },
+  ]
+}
+
+// Monitoring de Tempo
+prometheus.scrape "tempo" {
+  targets = [{"__address__" = "tempo:3200"}]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "tempo"
+    },
+  ]
+}
+
+// Monitoring de Mimir
+prometheus.scrape "mimir" {
+  targets = [{"__address__" = "mimir:9009"}]
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+  metrics_path    = "/metrics"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "mimir"
+    },
+  ]
+}
+
+// =====================================================
+// LOGGING DE DEBUG
+// =====================================================
+
+// Logs internes d'Alloy
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+// Exposition des métriques internes d'Alloy
+prometheus.exporter.self "alloy" {}
+
+prometheus.scrape "alloy_self" {
+  targets    = prometheus.exporter.self.alloy.targets
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  scrape_interval = "15s"
+
+  relabel_configs = [
+    {
+      target_label = "service"
+      replacement  = "alloy"
+    },
+  ]
+}
