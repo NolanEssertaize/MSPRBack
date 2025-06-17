@@ -1,278 +1,337 @@
-# Plant Care Application
+# Plant Care Application - Stack LGTM avec Alloy
 
-## Description
-Cette application est un système complet de gestion de soins pour plantes, développé avec FastAPI. Elle permet aux utilisateurs d'enregistrer leurs plantes, de demander des services de soins auprès de botanistes, et de gérer les instructions d'entretien des plantes.
+Cette documentation décrit l'implémentation de la stack d'observabilité LGTM (Loki, Grafana, Tempo, Mimir) avec Grafana Alloy pour l'application Plant Care.
 
-## Fonctionnalités
-- 🌱 **Gestion des plantes**
-  - Enregistrement de nouvelles plantes
-  - Téléchargement de photos de plantes
-  - Ajout d'instructions d'entretien
-  - Suivi des emplacements des plantes
+## 🚀 Démarrage Rapide
 
-- 👤 **Gestion des utilisateurs**
-  - Inscription et authentification des utilisateurs
-  - Sécurité basée sur les jetons JWT
-  - Chiffrement des données personnelles
-  - Accès basé sur les rôles (utilisateurs réguliers et botanistes)
+### Prérequis
+- Docker et Docker Compose
+- 8 GB de RAM minimum
+- Ports disponibles: 3000, 3100, 3200, 4317, 4318, 5432, 8000, 9009, 12345
 
-- 🤝 **Système de demande de soins**
-  - Gestion directe des soins par les botanistes
-  - Suivi des plantes en cours d'entretien
-  - Système de notification des statuts
+### Installation et Démarrage
 
-- 💬 **Système de commentaires**
-  - Ajout de commentaires sur les plantes
-  - Échange d'informations entre utilisateurs et botanistes
-  - Historique de communication
-
-## Stack Technique
-- **Framework Backend**: FastAPI
-- **Base de données**: SQLite avec SQLAlchemy ORM
-- **Authentification**: Jetons JWT
-- **Chiffrement**: Fernet (cryptography)
-- **Migrations**: Alembic
-- **Documentation API**: Swagger/OpenAPI
-- **Conteneurisation**: Docker et Docker Compose
-- **Tests**: Pytest avec base de données réelle
-
-## Prérequis
-- Docker et Docker Compose (pour le déploiement conteneurisé)
-- Python 3.10 ou supérieur (pour le développement local)
-- pip (gestionnaire de paquets Python)
-- virtualenv (recommandé pour le développement local)
-
-## Installation et déploiement
-
-### Utilisation de Docker (Recommandé)
-
-1. Clonez le dépôt:
 ```bash
-git clone [url-du-dépôt]
+# Cloner le projet et naviguer dans le répertoire
 cd plant-care-app
+
+# Rendre le script exécutable
+chmod +x setup-observability.sh
+
+# Démarrer la stack complète
+./setup-observability.sh start
 ```
 
-2. Configurez les variables d'environnement:
-   La configuration par défaut se trouve dans `docker-compose.yml`. Pour la production, vous devriez changer les clés `SECRET_KEY` et `ENCRYPTION_KEY`.
+Le script va automatiquement :
+- Créer la structure des répertoires
+- Générer un fichier `.env` avec des clés sécurisées
+- Démarrer tous les services
+- Exécuter les migrations de base de données
+- Configurer les dashboards Grafana
 
-3. Construisez et démarrez les conteneurs Docker:
+## 🏗️ Architecture
+
+### Services Déployés
+
+| Service | Port | Description | Interface |
+|---------|------|-------------|-----------|
+| **PostgreSQL** | 5432 | Base de données principale | - |
+| **Plant Care API** | 8000 | Application FastAPI | http://localhost:8000/docs |
+| **Grafana Alloy** | 12345 | Collecteur de télémétrie | http://localhost:12345 |
+| **Loki** | 3100 | Stockage des logs | - |
+| **Tempo** | 3200 | Stockage des traces | - |
+| **Mimir** | 9009 | Stockage des métriques | - |
+| **Grafana** | 3000 | Visualisation | http://localhost:3000 |
+
+### Flux de Données
+
+```
+Application FastAPI → Alloy → LGTM Stack → Grafana
+                     ↓
+              [Logs, Traces, Métriques]
+```
+
+## 📊 Observabilité
+
+### Métriques Collectées
+
+#### Métriques de l'Application
+- `plant_care_user_registrations_total` - Nombre total d'inscriptions
+- `plant_care_plant_creations_total` - Nombre total de plantes créées
+- `plant_care_care_requests_total` - Nombre total de demandes de soin
+- `plant_care_comments_created_total` - Nombre total de commentaires
+- `plant_care_active_users` - Nombre d'utilisateurs actifs
+- `plant_care_plants_in_care` - Nombre de plantes en soin
+
+#### Métriques de Performance
+- `plant_care_request_duration_seconds` - Durée des requêtes HTTP
+- `plant_care_database_query_duration_seconds` - Durée des requêtes DB
+- Métriques système (CPU, mémoire, disque)
+
+### Logs Structurés
+
+Tous les logs sont au format JSON avec les champs suivants :
+- `timestamp` - Horodatage ISO 8601
+- `level` - Niveau de log (DEBUG, INFO, WARNING, ERROR)
+- `service` - Nom du service
+- `trace_id` - ID de trace pour corrélation
+- `span_id` - ID de span pour corrélation
+- `user_id` - ID utilisateur si authentifié
+- `message` - Message du log
+- Champs contextuels spécifiques
+
+### Traces Distribuées
+
+OpenTelemetry auto-instrumente :
+- Requêtes HTTP FastAPI
+- Requêtes base de données SQLAlchemy/PostgreSQL
+- Requêtes HTTP sortantes
+- Opérations personnalisées avec `@trace_function`
+
+## 📈 Dashboards Grafana
+
+### Dashboard Principal : "Plant Care - Application Overview"
+
+**Panneaux disponibles :**
+1. **Request Rate** - Taux de requêtes par seconde
+2. **Total User Registrations** - Nombre total d'inscriptions
+3. **Response Time** - Temps de réponse (P50, P95)
+4. **Request Methods Distribution** - Distribution des méthodes HTTP
+5. **Plant Statistics** - Statistiques des plantes
+6. **Database Query Performance** - Performance des requêtes DB
+7. **Application Errors and Warnings** - Logs d'erreurs et avertissements
+
+### Accès Grafana
+- URL: http://localhost:3000
+- Login: `admin`
+- Password: `admin`
+
+## 🔧 Configuration
+
+### Variables d'Environnement
+
 ```bash
-docker-compose up -d
+# Base de données
+DATABASE_URL=postgresql://plant_user:plant_password@postgres:5432/plant_care_db
+
+# Observabilité
+ENABLE_OBSERVABILITY=true
+OTEL_SERVICE_NAME=plant-care-api
+OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
+
+# Sécurité
+SECRET_KEY=<généré automatiquement>
+ENCRYPTION_KEY=<généré automatiquement>
 ```
 
-4. Initialisez la base de données (première fois uniquement):
+### Configuration Alloy
+
+Le fichier `observability/alloy/config.alloy` configure :
+- Découverte des services Docker
+- Collecte des logs (conteneurs + système)
+- Collecte des métriques (Prometheus + custom)
+- Réception des traces OTLP
+- Export vers Loki, Tempo, et Mimir
+
+### Configuration PostgreSQL
+
+Optimisations incluses :
+- Pool de connexions configuré
+- Index de performance automatiques
+- Fonctions d'analyse et monitoring
+- Audit trail optionnel
+
+## 🔍 Utilisation
+
+### Recherche dans les Logs (Loki)
+
+```logql
+# Logs d'erreur de l'application
+{service="plant-care-api"} |= "ERROR"
+
+# Logs d'un utilisateur spécifique
+{service="plant-care-api"} | json | user_id="123"
+
+# Logs de requêtes lentes
+{service="plant-care-api"} | json | duration_ms > 1000
+```
+
+### Requêtes de Métriques (Mimir/Prometheus)
+
+```promql
+# Taux de requêtes par seconde
+rate(plant_care_request_duration_seconds_count[5m])
+
+# P95 du temps de réponse
+histogram_quantile(0.95, rate(plant_care_request_duration_seconds_bucket[5m]))
+
+# Taux d'erreur
+rate(plant_care_request_duration_seconds_count{status_code=~"5.."}[5m]) / 
+rate(plant_care_request_duration_seconds_count[5m])
+```
+
+### Recherche de Traces (Tempo)
+
+- Recherche par service : `service.name="plant-care-api"`
+- Recherche par utilisateur : `user.id="123"`
+- Recherche par durée : `duration > 1s`
+
+## 🚨 Alertes
+
+### Alertes Configurées
+
+1. **High Error Rate** - Taux d'erreur > 10%
+2. **Slow Response Time** - P95 > 2s
+3. **Database Connection Issues** - Échecs de connexion DB
+4. **High Memory Usage** - Utilisation mémoire > 80%
+
+### Configuration des Notifications
+
+Modifier `observability/grafana/provisioning/alerting/alerting.yml` pour configurer :
+- Email
+- Slack
+- Webhook
+- PagerDuty
+
+## 🛠️ Maintenance
+
+### Commandes Utiles
+
 ```bash
-docker-compose exec api alembic upgrade head
+# Démarrer la stack
+./setup-observability.sh start
+
+# Arrêter la stack
+./setup-observability.sh stop
+
+# Redémarrer la stack
+./setup-observability.sh restart
+
+# Voir le statut des services
+./setup-observability.sh status
+
+# Voir les logs d'un service
+./setup-observability.sh logs [service_name]
+
+# Nettoyage complet
+./setup-observability.sh clean
 ```
 
-5. Accédez à l'application:
-   - API: http://localhost:8000
-   - Documentation: http://localhost:8000/docs
-   - Documentation alternative: http://localhost:8000/redoc
+### Monitoring de la Stack
 
-6. Commandes Docker supplémentaires:
+```bash
+# Vérifier les métriques d'Alloy
+curl http://localhost:12345/metrics
 
-   - Afficher les logs:
+# Vérifier la santé de Loki
+curl http://localhost:3100/ready
+
+# Vérifier la santé de Tempo
+curl http://localhost:3200/ready
+
+# Vérifier la santé de Mimir
+curl http://localhost:9009/ready
+```
+
+### Sauvegarde
+
+```bash
+# Sauvegarder la base de données
+docker-compose -f docker-compose.observability.yml exec postgres \
+  pg_dump -U plant_user plant_care_db > backup.sql
+
+# Sauvegarder les données Grafana
+docker cp plant_care_grafana:/var/lib/grafana ./grafana-backup
+```
+
+## 🔒 Sécurité
+
+### Bonnes Pratiques Implémentées
+
+- Utilisateurs non-root dans les conteneurs
+- Secrets générés automatiquement
+- Chiffrement des données sensibles
+- Isolation réseau avec Docker Compose
+- Health checks pour tous les services
+
+### Configuration Production
+
+Pour la production, modifier :
+
+```bash
+# Variables d'environnement
+ENVIRONMENT=production
+SECRET_KEY=<votre-clé-forte>
+ENCRYPTION_KEY=<votre-clé-de-chiffrement>
+
+# Base de données
+DATABASE_URL=postgresql://user:pass@prod-db:5432/plant_care
+
+# Grafana
+GF_SECURITY_ADMIN_PASSWORD=<mot-de-passe-fort>
+```
+
+## 🐛 Dépannage
+
+### Problèmes Courants
+
+1. **Services qui ne démarrent pas**
    ```bash
-   docker-compose logs -f
+   # Vérifier les logs
+   ./setup-observability.sh logs
+   
+   # Vérifier l'espace disque
+   df -h
    ```
 
-   - Arrêter l'application:
+2. **Grafana inaccessible**
    ```bash
-   docker-compose down
+   # Redémarrer Grafana
+   docker-compose -f docker-compose.observability.yml restart grafana
    ```
 
-   - Reconstruire après des modifications:
+3. **Métriques manquantes**
    ```bash
-   docker-compose up --build -d
+   # Vérifier Alloy
+   curl http://localhost:12345/-/config
    ```
 
-### Configuration du développement local
+4. **Problèmes de base de données**
+   ```bash
+   # Vérifier PostgreSQL
+   docker-compose -f docker-compose.observability.yml exec postgres \
+     pg_isready -U plant_user
+   ```
 
-1. Clonez le dépôt:
-```bash
-git clone [url-du-dépôt]
-cd plant-care-app
-```
-
-2. Créez et activez un environnement virtuel:
-```bash
-python -m venv .venv
-source .\.venv/bin/activate  # Sur Windows: .venv\Scripts\activate
-```
-
-3. Installez les dépendances:
-```bash
-pip install -r requirements.txt
-```
-
-4. Créez le fichier d'environnement:
-Créez un fichier `.env` dans le répertoire racine avec:
-```env
-DATABASE_URL=sqlite:///a_rosa_je.db
-SECRET_KEY=votre-clé-très-secrète-à-changer
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-ENCRYPTION_KEY=votre-clé-de-chiffrement-à-changer
-ENCRYPTION_ENABLED=true
-```
-
-5. Initialisez la base de données:
-```bash
-alembic upgrade head
-```
-
-6. Démarrez l'application:
-```bash
-uvicorn app.main:app --reload
-```
-
-## Points d'API
-
-### Authentification
-- `POST /token` - Obtenir un jeton d'accès
-- `POST /users/` - Créer un nouvel utilisateur
-
-### Utilisateurs
-- `PUT /users/{user_id}` - Mettre à jour un utilisateur
-- `GET /users/me/` - Obtenir les informations de l'utilisateur actuel
-- `DELETE /users/` - Supprimer un utilisateur
-
-### Plantes
-- `POST /plants/` - Créer une nouvelle plante
-- `GET /my_plants/` - Lister les plantes de l'utilisateur
-- `GET /all_plants/` - Lister toutes les plantes sauf celles de l'utilisateur
-- `PUT /plants/{id}` - Mettre à jour une plante
-- `DELETE /plants/` - Supprimer une plante
-
-### Soins des plantes
-- `PUT /plants/{plant_id}/start-care` - Commencer à prendre soin d'une plante
-- `PUT /plants/{plant_id}/end-care` - Terminer les soins d'une plante
-- `GET /care-requests/` - Lister les demandes de soins
-
-### Commentaires
-- `POST /comments/` - Créer un commentaire
-- `GET /plants/{plant_id}/comments/` - Obtenir les commentaires d'une plante
-- `PUT /comments/{comment_id}` - Mettre à jour un commentaire
-- `DELETE /comments/{comment_id}` - Supprimer un commentaire
-- `GET /users/{user_id}/comments/` - Obtenir les commentaires d'un utilisateur
-
-## Structure du projet
-```
-plant_care_app/
-├── alembic/                  # Migrations de base de données
-│   ├── versions/
-│   └── env.py
-├── app/                      # Code source de l'application
-│   ├── __init__.py
-│   ├── main.py              # Application FastAPI
-│   ├── config.py            # Paramètres de configuration
-│   ├── database.py          # Connexion à la base de données
-│   ├── models.py            # Modèles SQLAlchemy
-│   ├── schemas.py           # Modèles Pydantic
-│   ├── auth.py              # Logique d'authentification
-│   ├── encryption.py        # Module de chiffrement
-│   └── tests/               # Tests avec base de données réelle
-├── photos/                   # Photos des plantes téléchargées
-├── requirements.txt          # Dépendances du projet
-├── alembic.ini              # Configuration Alembic
-├── Dockerfile               # Configuration d'image Docker
-├── docker-compose.yml       # Configuration Docker Compose
-├── run_tests.sh             # Script d'exécution des tests
-├── .dockerignore            # Exclusions pour la construction Docker
-└── .env                     # Variables d'environnement (dev local uniquement)
-```
-
-## Sécurité des données
-
-### Chiffrement des données personnelles
-Cette application utilise le chiffrement Fernet pour protéger les informations personnelles des utilisateurs:
-
-- Les données chiffrées incluent:
-  - Adresses email
-  - Numéros de téléphone
-  - Noms d'utilisateur
-
-- Avantages du chiffrement:
-  - Protection contre les accès non autorisés à la base de données
-  - Conformité améliorée avec les réglementations sur la protection des données (RGPD)
-  - Risque réduit en cas de violation de données
-
-### Configuration du chiffrement
-Le chiffrement est configuré via les variables d'environnement:
-```env
-ENCRYPTION_KEY=votre-clé-de-chiffrement-sécurisée
-ENCRYPTION_ENABLED=true
-```
-
-## Tests
-
-L'application utilise Pytest avec une base de données réelle pour des tests complets:
+### Logs de Debug
 
 ```bash
-# Exécuter tous les tests
-./run_tests.sh
-
-# Exécuter les tests dans Docker
-./run_tests.sh --docker
+# Activer le debug pour un service
+docker-compose -f docker-compose.observability.yml exec api \
+  python -c "import logging; logging.basicConfig(level=logging.DEBUG)"
 ```
 
-Les tests couvrent:
-- Authentification des utilisateurs
-- Opérations CRUD sur les plantes
-- Système de commentaires
-- Chiffrement et déchiffrement des données
+## 📚 Ressources
 
-## Notes de sécurité
-- Changez les clés `SECRET_KEY` et `ENCRYPTION_KEY` par défaut en production
-- Utilisez HTTPS en production
-- Implémentez la limitation de débit pour une utilisation en production
-- Mettez régulièrement à jour les dépendances
+- [Documentation Grafana Alloy](https://grafana.com/docs/alloy/)
+- [Documentation OpenTelemetry Python](https://opentelemetry.io/docs/instrumentation/python/)
+- [Documentation FastAPI](https://fastapi.tiangolo.com/)
+- [Documentation PostgreSQL](https://www.postgresql.org/docs/)
 
-## Sauvegarde et maintenance
+## 🤝 Contribution
 
-### Sauvegarde des données
-L'application utilise des volumes pour conserver les données en dehors du conteneur:
-- Fichier de base de données (`a_rosa_je.db`)
-- Répertoire des photos de plantes (`photos/`)
+Pour contribuer à l'amélioration de la stack d'observabilité :
 
-Pour sauvegarder vos données, copiez simplement ces fichiers depuis la machine hôte.
+1. Fork le projet
+2. Créer une branche feature
+3. Tester les modifications avec la stack complète
+4. Soumettre une pull request
 
-### Migrations de base de données
-Après avoir modifié les modèles, créez et appliquez les migrations:
+## 📞 Support
 
-Avec Docker:
-```bash
-docker-compose exec api alembic revision --autogenerate -m "Description des changements"
-docker-compose exec api alembic upgrade head
-```
+En cas de problème avec la stack d'observabilité :
 
-## Dépannage
-
-### Problèmes courants
-- **Problèmes de connexion à la base de données**: Vérifiez que le fichier de base de données existe et a les permissions appropriées
-- **Échecs de téléchargement de photos**: Vérifiez que le répertoire photos existe et a les permissions d'écriture
-- **Erreurs d'authentification**: Vérifiez que votre jeton n'a pas expiré (par défaut 30 minutes)
-- **Problèmes de chiffrement**: Assurez-vous que la clé de chiffrement est cohérente et correctement configurée
-
-### Spécifique à Docker
-- **Le conteneur ne démarre pas**: Vérifiez les logs avec `docker-compose logs -f api`
-- **Problèmes de montage de volume**: Vérifiez le chemin dans docker-compose.yml et les permissions du répertoire
-
-### Réinitialisation de la base de données
-Si vous rencontrez des problèmes de migration complexes, vous pouvez réinitialiser complètement la base de données:
-
-```bash
-# Arrêtez l'application
-docker-compose down
-
-# Supprimez la base de données
-rm a_rosa_je.db
-
-# Redémarrez et recréez la base de données
-docker-compose up -d
-docker-compose exec api alembic upgrade head
-```
-
-## Contact
-Nolan Essertaize
+1. Vérifier les logs : `./setup-observability.sh logs`
+2. Vérifier le statut : `./setup-observability.sh status`
+3. Consulter cette documentation
+4. Créer une issue GitHub avec les logs d'erreur
