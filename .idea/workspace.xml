@@ -70,7 +70,7 @@
       <window_info anchor="bottom" id="Version Control" order="0" />
       <window_info anchor="bottom" id="Problems" order="1" />
       <window_info anchor="bottom" id="Problems View" order="2" />
-      <window_info active="true" anchor="bottom" x="1926" y="0" width="1920" height="1032" id="Terminal" order="3" type="FLOATING" visible="true" />
+      <window_info active="true" anchor="bottom" x="1925" y="9" width="1920" height="1030" id="Terminal" order="3" type="FLOATING" visible="true" />
       <window_info anchor="bottom" id="Services" order="4" />
       <window_info anchor="bottom" id="Python Packages" order="5" weight="0.1" />
       <window_info anchor="bottom" id="Python Console" order="6" weight="0.1" />
@@ -135,7 +135,7 @@
       <workItem from="1744009615851" duration="308000" />
       <workItem from="1750161469161" duration="212000" />
       <workItem from="1750161689439" duration="3215000" />
-      <workItem from="1750165804018" duration="5311000" />
+      <workItem from="1750165804018" duration="8427000" />
     </task>
     <servers />
   </component>

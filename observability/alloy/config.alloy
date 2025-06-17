@@ -121,33 +121,39 @@ prometheus.relabel "docker_metrics" {
 // Métriques de l'application FastAPI
 prometheus.scrape "fastapi_app" {
   targets = [{"__address__" = "api:8000"}]
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.fastapi_metrics.receiver]
 
   scrape_interval = "15s"
   metrics_path    = "/metrics"
-
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "plant-care-api"
-    },
-  ]
 }
 
-// Métriques PostgreSQL
-prometheus.scrape "postgres" {
-  targets = [{"__address__" = "postgres:5432"}]
+// Relabeling pour FastAPI
+prometheus.relabel "fastapi_metrics" {
   forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "plant-care-api"
+  }
+}
+
+// Métriques PostgreSQL - simplifiées car PostgreSQL n'expose pas de métriques par défaut
+prometheus.scrape "postgres_exporter" {
+  targets = [{"__address__" = "postgres_exporter:9187"}]
+  forward_to = [prometheus.relabel.postgres_metrics.receiver]
 
   scrape_interval = "30s"
   metrics_path    = "/metrics"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "postgres"
-    },
-  ]
+// Relabeling pour PostgreSQL
+prometheus.relabel "postgres_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "postgres"
+  }
 }
 
 // Écriture vers Mimir
@@ -173,8 +179,8 @@ otelcol.receiver.otlp "default" {
 
   output {
     traces  = [otelcol.processor.batch.default.input]
-    metrics = [prometheus.remote_write.default.receiver]
-    logs    = [loki.write.default.receiver]
+    metrics = [otelcol.processor.batch.otel_metrics.input]
+    logs    = [otelcol.processor.batch.otel_logs.input]
   }
 }
 
@@ -183,6 +189,30 @@ otelcol.processor.batch "default" {
   output {
     traces = [otelcol.exporter.otlp.tempo.input]
   }
+}
+
+// Traitement en lot des métriques OTLP
+otelcol.processor.batch "otel_metrics" {
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// Traitement en lot des logs OTLP
+otelcol.processor.batch "otel_logs" {
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
+
+// Export des métriques OTLP vers Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.default.receiver]
+}
+
+// Export des logs OTLP vers Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.default.receiver]
 }
 
 // Export vers Tempo
@@ -206,16 +236,19 @@ prometheus.exporter.unix "system" {
 
 prometheus.scrape "system_metrics" {
   targets    = prometheus.exporter.unix.system.targets
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.system_metrics.receiver]
 
   scrape_interval = "15s"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "system"
-    },
-  ]
+// Relabeling pour les métriques système
+prometheus.relabel "system_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "system"
+  }
 }
 
 // =====================================================
@@ -225,49 +258,58 @@ prometheus.scrape "system_metrics" {
 // Monitoring de Loki
 prometheus.scrape "loki" {
   targets = [{"__address__" = "loki:3100"}]
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.loki_metrics.receiver]
 
   scrape_interval = "15s"
   metrics_path    = "/metrics"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "loki"
-    },
-  ]
+// Relabeling pour Loki
+prometheus.relabel "loki_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "loki"
+  }
 }
 
 // Monitoring de Tempo
 prometheus.scrape "tempo" {
   targets = [{"__address__" = "tempo:3200"}]
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.tempo_metrics.receiver]
 
   scrape_interval = "15s"
   metrics_path    = "/metrics"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "tempo"
-    },
-  ]
+// Relabeling pour Tempo
+prometheus.relabel "tempo_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "tempo"
+  }
 }
 
 // Monitoring de Mimir
 prometheus.scrape "mimir" {
   targets = [{"__address__" = "mimir:9009"}]
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.mimir_metrics.receiver]
 
   scrape_interval = "15s"
   metrics_path    = "/metrics"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "mimir"
-    },
-  ]
+// Relabeling pour Mimir
+prometheus.relabel "mimir_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "mimir"
+  }
 }
 
 // =====================================================
@@ -285,14 +327,17 @@ prometheus.exporter.self "alloy" {}
 
 prometheus.scrape "alloy_self" {
   targets    = prometheus.exporter.self.alloy.targets
-  forward_to = [prometheus.remote_write.default.receiver]
+  forward_to = [prometheus.relabel.alloy_metrics.receiver]
 
   scrape_interval = "15s"
+}
 
-  relabel_configs = [
-    {
-      target_label = "service"
-      replacement  = "alloy"
-    },
-  ]
+// Relabeling pour Alloy
+prometheus.relabel "alloy_metrics" {
+  forward_to = [prometheus.remote_write.default.receiver]
+
+  rule {
+    target_label = "service"
+    replacement  = "alloy"
+  }
 }

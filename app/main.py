@@ -43,7 +43,8 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Middleware pour l'observabilité
+
+# Middleware pour l'observabilité - VERSION CORRIGÉE
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
     """Middleware pour ajouter des informations d'observabilité"""
@@ -68,18 +69,30 @@ async def observability_middleware(request: Request, call_next):
         client_ip=request.client.host
     )
 
-    # Tracer la requête
-    with tracer.start_as_current_span(
-            f"{request.method} {request.url.path}",
-            attributes={
-                "http.method": request.method,
-                "http.url": str(request.url),
-                "http.user_agent": request.headers.get("user-agent", ""),
-                "http.client_ip": request.client.host,
-            }
-    ) if tracer else None:
+    # Tracer la requête SEULEMENT si le tracer existe
+    span_context = None
+    if tracer is not None:
+        try:
+            span_context = tracer.start_as_current_span(
+                f"{request.method} {request.url.path}",
+                attributes={
+                    "http.method": request.method,
+                    "http.url": str(request.url),
+                    "http.user_agent": request.headers.get("user-agent", ""),
+                    "http.client_ip": request.client.host,
+                }
+            )
+        except Exception as e:
+            logger.warning(f"Could not start tracing span: {e}")
+            span_context = None
 
-        response = await call_next(request)
+    try:
+        # Utiliser le span comme context manager s'il existe
+        if span_context is not None:
+            async with span_context:
+                response = await call_next(request)
+        else:
+            response = await call_next(request)
 
         # Calculer la durée
         duration = time.time() - start_time
@@ -93,10 +106,24 @@ async def observability_middleware(request: Request, call_next):
             duration_ms=round(duration * 1000, 2)
         )
 
+        return response
+
+    except Exception as e:
+        # Calculer la durée même en cas d'erreur
+        duration = time.time() - start_time
+
+        # Logger de l'erreur
+        logger.error(
+            "Request failed",
+            method=request.method,
+            url=str(request.url),
+            error=str(e),
+            duration_ms=round(duration * 1000, 2)
+        )
+        raise
+    finally:
         # Nettoyer le contexte utilisateur
         observability.clear_current_user()
-
-        return response
 
 @app.get("/health")
 async def health_check():
