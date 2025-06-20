@@ -40,11 +40,9 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - ENCRYPTION_KEY=your-secure-encryption-key-change-this-in-production
       - ENCRYPTION_ENABLED=true
-      # Variables pour l'observabilité
+      # Variables pour l'observabilité simplifiée
       - ENABLE_OBSERVABILITY=true
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
-      - OTEL_SERVICE_NAME=plant-care-api
-      - OTEL_RESOURCE_ATTRIBUTES=service.name=plant-care-api,service.version=1.0.0
+      - ENABLE_METRICS=true
       - ENVIRONMENT=development
     networks:
       - plant_care_network
@@ -58,12 +56,62 @@ services:
     labels:
       - "observability=enabled"
 
-  # Loki (logs) - doit démarrer AVANT Alloy
+  # Node Exporter pour les métriques système
+  node-exporter:
+    image: prom/node-exporter:v1.6.1
+    container_name: plant_care_node_exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - plant_care_network
+    restart: unless-stopped
+
+  # Prometheus pour la collecte des métriques
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    container_name: plant_care_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus:/etc/prometheus:ro
+      - prometheus_data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--web.enable-remote-write-receiver'
+    networks:
+      - plant_care_network
+    depends_on:
+      - node-exporter
+      - api
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Loki (logs) - conservé pour les logs
   loki:
     image: grafana/loki:2.9.2
     container_name: plant_care_loki
     ports:
-      - "3100:3100"  # Port Loki
+      - "3100:3100"
     volumes:
       - ./observability/loki:/etc/loki
       - loki_data:/loki
@@ -76,13 +124,13 @@ services:
       timeout: 10s
       retries: 5
 
-  # Tempo (traces)
+  # Tempo (traces) - conservé pour les traces
   tempo:
     image: grafana/tempo:2.3.1
     container_name: plant_care_tempo
     ports:
-      - "3200:3200"   # Tempo HTTP
-      - "9095:9095"   # Tempo gRPC
+      - "3200:3200"
+      - "9095:9095"
     volumes:
       - ./observability/tempo:/etc/tempo
       - tempo_data:/tmp/tempo
@@ -96,33 +144,14 @@ services:
       timeout: 10s
       retries: 5
 
-  # Mimir (métriques)
-  mimir:
-    image: grafana/mimir:2.10.4
-    container_name: plant_care_mimir
-    ports:
-      - "9009:9009"
-    volumes:
-      - ./observability/mimir:/etc/mimir
-      - mimir_data:/data
-    command:
-      - "-config.file=/etc/mimir/mimir.yml"
-    networks:
-      - plant_care_network
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9009/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-
-  # Grafana Alloy (collecteur de télémétrie) - APRÈS Loki, Tempo, Mimir
+  # Grafana Alloy (collecteur) - simplifié pour Prometheus uniquement
   alloy:
     image: grafana/alloy:latest
     container_name: plant_care_alloy
     ports:
-      - "12345:12345"  # Interface web d'Alloy
-      - "4317:4317"    # OTLP gRPC receiver
-      - "4318:4318"    # OTLP HTTP receiver
+      - "12345:12345"
+      - "4317:4317"
+      - "4318:4318"
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/log:/var/log:ro
@@ -139,7 +168,7 @@ services:
         condition: service_healthy
       tempo:
         condition: service_healthy
-      mimir:
+      prometheus:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:12345/-/ready"]
@@ -167,7 +196,7 @@ services:
     depends_on:
       - loki
       - tempo
-      - mimir
+      - prometheus
       - alloy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
@@ -177,9 +206,9 @@ services:
 
 volumes:
   postgres_data:
+  prometheus_data:
   loki_data:
   tempo_data:
-  mimir_data:
   grafana_data:
 
 networks:

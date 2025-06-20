@@ -1,32 +1,37 @@
+# Dockerfile
 FROM python:3.10-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy dependency files
-COPY requirements.txt .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install dependencies
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Create a non-root user for security
+# Auto-install OpenTelemetry instrumentations
+RUN opentelemetry-bootstrap --action=install
+
+# Create non-root user
 RUN adduser --disabled-password --gecos "" appuser
 
-# Create directory for photos and fix permissions
-RUN mkdir -p photos && chown -R appuser:appuser /app
+# Create directories and set permissions
+RUN mkdir -p photos logs && chown -R appuser:appuser /app
 
 # Copy application code
 COPY --chown=appuser:appuser . .
 
-# Expose port
-EXPOSE 8000
-
 # Switch to non-root user
 USER appuser
 
-# Add health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8000/docs || exit 1
+# Expose port
+EXPOSE 8000
 
-# Start the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start with auto-instrumentation
+CMD ["opentelemetry-instrument", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
