@@ -9,7 +9,6 @@ from typing import Optional
 from contextlib import contextmanager
 from fastapi import FastAPI, Request
 
-# OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
@@ -24,11 +23,9 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.instrumentation.requests import RequestsInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
-# Prometheus and logging
 from prometheus_client import Counter, Histogram, Gauge
 import structlog
 
-# Variables globales pour les métriques personnalisées
 user_registrations_counter = None
 plant_creations_counter = None
 care_requests_counter = None
@@ -51,7 +48,6 @@ class ObservabilityManager:
         try:
             print("Initializing full observability stack with OpenTelemetry...")
             
-            # Setup dans l'ordre
             self.setup_logging()
             self.setup_opentelemetry()
             self.setup_custom_metrics() 
@@ -93,18 +89,15 @@ class ObservabilityManager:
     def setup_opentelemetry(self):
         """Configure OpenTelemetry pour les traces et métriques"""
         try:
-            # Créer les ressources
             resource = Resource.create({
                 ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "plant-care-api"),
                 ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
                 ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("ENVIRONMENT", "development"),
             })
 
-            # Configuration du TracerProvider
             self.tracer_provider = TracerProvider(resource=resource)
             trace.set_tracer_provider(self.tracer_provider)
 
-            # Configuration de l'exporteur OTLP pour les traces
             otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4317")
             print(f"Configuring OTLP trace exporter with endpoint: {otlp_endpoint}")
             
@@ -114,14 +107,11 @@ class ObservabilityManager:
                 headers={}
             )
 
-            # Ajouter le span processor
             span_processor = BatchSpanProcessor(otlp_span_exporter)
             self.tracer_provider.add_span_processor(span_processor)
 
-            # Obtenir le tracer
             self.tracer = trace.get_tracer(__name__)
 
-            # Configuration des métriques OTLP
             otlp_metric_exporter = OTLPMetricExporter(
                 endpoint=otlp_endpoint,
                 insecure=True,
@@ -148,15 +138,12 @@ class ObservabilityManager:
     def setup_auto_instrumentation(self, app: FastAPI):
         """Configure l'instrumentation automatique"""
         try:
-            # Instrumenter FastAPI
             FastAPIInstrumentor.instrument_app(app)
             print("FastAPI auto-instrumentation enabled")
 
-            # Instrumenter SQLAlchemy
             SQLAlchemyInstrumentor().instrument()
             print("SQLAlchemy auto-instrumentation enabled")
 
-            # Instrumenter les requêtes HTTP
             RequestsInstrumentor().instrument()
             HTTPXClientInstrumentor().instrument()
             print("HTTP clients auto-instrumentation enabled")
@@ -170,7 +157,6 @@ class ObservabilityManager:
         global comments_counter, active_users_gauge, plants_in_care_gauge
 
         try:
-            # Compteurs pour les événements business
             user_registrations_counter = Counter(
                 'plant_care_user_registrations_total',
                 'Number of user registrations',
@@ -194,7 +180,6 @@ class ObservabilityManager:
                 'Number of comments created'
             )
 
-            # Gauges pour les valeurs courantes
             active_users_gauge = Gauge(
                 'plant_care_active_users',
                 'Number of currently active users'
@@ -217,7 +202,6 @@ class ObservabilityManager:
         async def observability_middleware(request: Request, call_next):
             start_time = time.time()
 
-            # Log de la requête entrante avec contexte utilisateur
             user_context = {"user_id": self.current_user_id} if self.current_user_id else {}
 
             self.logger.info(
@@ -231,10 +215,8 @@ class ObservabilityManager:
             try:
                 response = await call_next(request)
 
-                # Calculer le temps de traitement
                 duration = time.time() - start_time
 
-                # Log de la réponse
                 self.logger.info(
                     "request_completed",
                     method=request.method,
@@ -244,7 +226,6 @@ class ObservabilityManager:
                     **user_context
                 )
 
-                # Ajouter le header de temps de traitement
                 response.headers["X-Process-Time"] = str(duration)
                 return response
 
@@ -262,7 +243,6 @@ class ObservabilityManager:
                 )
                 raise
 
-    # Méthodes pour enregistrer les métriques business
     def record_user_registration(self, user_type: str = "regular"):
         """Enregistre une inscription d'utilisateur"""
         try:
@@ -311,11 +291,9 @@ class ObservabilityManager:
         except Exception as e:
             print(f"Error updating plants in care metric: {e}")
 
-    # Gestion du contexte utilisateur
     def set_current_user(self, user_id: str):
         """Définit l'utilisateur courant pour le contexte"""
         self.current_user_id = user_id
-        # Ajouter l'utilisateur aux attributs de span actuel si disponible
         if self.tracer:
             current_span = trace.get_current_span()
             if current_span:
@@ -338,7 +316,6 @@ class ObservabilityManager:
             else:
                 self.clear_current_user()
 
-    # Méthodes de logging avec contexte
     def log_info(self, message: str, **kwargs):
         """Log d'information avec contexte utilisateur"""
         try:
@@ -366,10 +343,8 @@ class ObservabilityManager:
         except:
             print(f"WARNING: {message} - {kwargs}")
 
-# Instance globale
 observability = ObservabilityManager()
 
-# Fonctions de commodité pour maintenir la compatibilité
 def get_logger():
     """Retourne le logger structuré"""
     return observability.logger

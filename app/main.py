@@ -15,7 +15,6 @@ from app.database import engine, get_db
 from app.config import settings
 from app.observability import observability, get_logger, get_tracer, trace_function
 
-# Initialiser l'observabilité avant l'application
 base_url = "localhost:8000"
 models.Base.metadata.create_all(bind=engine)
 
@@ -25,7 +24,6 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Initialiser l'observabilité
 observability.initialize(app)
 logger = get_logger()
 tracer = get_tracer()
@@ -44,23 +42,18 @@ app.add_middleware(
 )
 
 
-# Middleware pour l'observabilité - VERSION CORRIGÉE
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
     """Middleware pour ajouter des informations d'observabilité"""
     start_time = time.time()
 
-    # Obtenir l'utilisateur courant s'il est authentifié
     auth_header = request.headers.get("authorization")
     if auth_header and auth_header.startswith("Bearer "):
         try:
-            # Extraire l'ID utilisateur du token (simplifié)
-            # En production, vous voudriez décoder le token proprement
             observability.set_current_user("authenticated_user")
         except:
             pass
 
-    # Logger de la requête entrante
     logger.info(
         "Request started",
         method=request.method,
@@ -69,7 +62,6 @@ async def observability_middleware(request: Request, call_next):
         client_ip=request.client.host
     )
 
-    # Tracer la requête SEULEMENT si le tracer existe
     span_context = None
     if tracer is not None:
         try:
@@ -87,17 +79,14 @@ async def observability_middleware(request: Request, call_next):
             span_context = None
 
     try:
-        # Utiliser le span comme context manager s'il existe
         if span_context is not None:
             async with span_context:
                 response = await call_next(request)
         else:
             response = await call_next(request)
 
-        # Calculer la durée
         duration = time.time() - start_time
 
-        # Logger de la réponse
         logger.info(
             "Request completed",
             method=request.method,
@@ -109,10 +98,8 @@ async def observability_middleware(request: Request, call_next):
         return response
 
     except Exception as e:
-        # Calculer la durée même en cas d'erreur
         duration = time.time() - start_time
 
-        # Logger de l'erreur
         logger.error(
             "Request failed",
             method=request.method,
@@ -122,7 +109,6 @@ async def observability_middleware(request: Request, call_next):
         )
         raise
     finally:
-        # Nettoyer le contexte utilisateur
         observability.clear_current_user()
 
 @app.get("/health")
@@ -144,7 +130,6 @@ async def preflight_handler():
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-# ======= AUTHENTICATION =======
 
 @app.post("/token", tags=["Authentication"])
 @trace_function("user_authentication")
@@ -154,11 +139,9 @@ async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
     """
     logger.info("User login attempt", email=form_data.username)
 
-    # Recherchons l'utilisateur par son email en utilisant le hash
     email_hash = security_manager.hash_value(form_data.username)
     user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
 
-    # Vérifions si l'utilisateur existe et si le mot de passe est correct
     if not user or not auth.verify_password(form_data.password, user.hashed_password):
         logger.warning("Failed login attempt", email=form_data.username)
         raise HTTPException(
@@ -167,7 +150,6 @@ async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Générons le jeton d'accès avec l'email déchiffré comme identifiant
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
         data={"sub": security_manager.decrypt_value(user.email_encrypted)},
@@ -179,7 +161,6 @@ async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestF
 
     return {"access_token": access_token, "token_type": "bearer"}
 
-# ======= USER MANAGEMENT =======
 
 @app.post("/users/", response_model=schemas.User, tags=["Users"])
 @trace_function("user_creation")
@@ -188,21 +169,18 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
     logger.info("Creating new user", email=user.email, username=user.username, is_botanist=user.is_botanist)
 
-    # Vérifier l'unicité de l'email en utilisant le hash
     email_hash = security_manager.hash_value(user.email)
     db_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
     if db_user:
         logger.warning("User creation failed - email already exists", email=user.email)
         raise HTTPException(status_code=400, detail="Email already registered")
 
-    # Vérifier l'unicité du nom d'utilisateur en utilisant le hash
     username_hash = security_manager.hash_value(user.username)
     db_user = db.query(models.User).filter(models.User.username_hash == username_hash).first()
     if db_user:
         logger.warning("User creation failed - username already exists", username=user.username)
         raise HTTPException(status_code=400, detail="Username already taken")
 
-    # Créer l'utilisateur avec versions hashées et chiffrées
     db_user = models.User(
         email_hash=email_hash,
         username_hash=username_hash,
@@ -219,13 +197,11 @@ async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_user)
 
-    # Enregistrer la métrique
     user_type = "botanist" if user.is_botanist else "regular"
     observability.record_user_registration(user_type)
 
     logger.info("User created successfully", user_id=db_user.id, user_type=user_type)
 
-    # Transformer le modèle DB en schéma de réponse avec les valeurs déchiffrées
     return {
         "id": db_user.id,
         "email": security_manager.decrypt_value(db_user.email_encrypted),
@@ -250,20 +226,17 @@ async def edit_user(
 
     logger.info("Updating user", user_id=user_id, current_user_id=current_user.id)
 
-    # Vérifier si l'utilisateur essaie de mettre à jour le profil de quelqu'un d'autre
     if user_id != current_user.id:
         logger.warning("Unauthorized user update attempt",
                        target_user_id=user_id,
                        current_user_id=current_user.id)
         raise HTTPException(status_code=403, detail="Not authorized to update other users")
 
-    # Récupérer l'utilisateur à mettre à jour
     db_user = db.query(models.User).filter(models.User.id == user_id).first()
     if not db_user:
         logger.error("User not found for update", user_id=user_id)
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Vérifier l'unicité de l'email et du username si modifiés
     if email and email != current_user.email:
         email_hash = security_manager.hash_value(email)
         existing_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
@@ -278,7 +251,6 @@ async def edit_user(
             logger.warning("Username already taken", username=username, user_id=user_id)
             raise HTTPException(status_code=400, detail="Username already taken")
 
-    # Mettre à jour les champs
     if email is not None:
         db_user.email_hash = security_manager.hash_value(email)
         db_user.email_encrypted = security_manager.encrypt_value(email)
@@ -329,7 +301,6 @@ async def delete_user(id: int, db: Session = Depends(get_db), current_user: mode
     logger.info("User deleted successfully", user_id=id)
     return db_user
 
-# ======= PLANT MANAGEMENT =======
 
 @app.post("/plants/", tags=["Plants"])
 @trace_function("plant_creation")
@@ -369,7 +340,6 @@ async def create_plant(
     db.commit()
     db.refresh(db_plant)
 
-    # Enregistrer la métrique
     owner_type = "botanist" if current_user.is_botanist else "regular"
     observability.record_plant_creation(owner_type)
 
@@ -408,7 +378,6 @@ async def update_plant(
             detail="Plant not found or not owned by current user"
         )
 
-    # Mettre à jour les champs
     if name is not None:
         plant.name = name
     if location is not None:
@@ -419,7 +388,6 @@ async def update_plant(
         plant.in_care_id = in_care_id
 
     if photo and photo.filename:
-        # Supprimer l'ancienne photo
         if plant.photo_url and os.path.exists(plant.photo_url.replace(f"{base_url}/", "")):
             try:
                 os.remove(plant.photo_url.replace(f"{base_url}/", ""))
@@ -501,7 +469,6 @@ async def list_all_plants_except_users(
     logger.info("All plants retrieved", user_id=current_user.id, count=len(plants))
     return plants
 
-# ======= PLANT CARE =======
 
 @app.put("/plants/{plant_id}/start-care", tags=["Plant Care"])
 @trace_function("start_plant_care")
@@ -522,7 +489,6 @@ async def start_plant_care(
     db.commit()
     db.refresh(plant)
 
-    # Enregistrer la métrique
     observability.record_care_request("start")
 
     logger.info("Plant care started", plant_id=plant_id, botanist_id=current_user.id)
@@ -550,7 +516,6 @@ async def end_plant_care(
     db.commit()
     db.refresh(plant)
 
-    # Enregistrer la métrique
     observability.record_care_request("end")
 
     logger.info("Plant care ended", plant_id=plant_id, botanist_id=current_user.id)
@@ -578,7 +543,6 @@ async def list_care_requests(
     logger.info("Care requests retrieved", user_id=current_user.id, count=len(care_requests))
     return care_requests
 
-# ======= COMMENTARY MANAGEMENT =======
 
 @app.post("/comments/", tags=["Comments"])
 @trace_function("comment_creation")
@@ -591,13 +555,11 @@ async def create_comment(
     """Create a comment on a plant."""
     logger.info("Creating comment", plant_id=plant_id, user_id=current_user.id)
 
-    # Check if plant exists
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
     if not plant:
         logger.error("Plant not found for comment", plant_id=plant_id)
         raise HTTPException(status_code=404, detail="Plant not found")
 
-    # Create comment
     db_comment = models.Comment(
         plant_id=plant_id,
         user_id=current_user.id,
@@ -609,7 +571,6 @@ async def create_comment(
     db.commit()
     db.refresh(db_comment)
 
-    # Enregistrer la métrique
     observability.record_comment_creation()
 
     logger.info("Comment created successfully",
