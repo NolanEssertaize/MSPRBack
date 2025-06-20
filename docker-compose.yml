@@ -40,10 +40,19 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - ENCRYPTION_KEY=your-secure-encryption-key-change-this-in-production
       - ENCRYPTION_ENABLED=true
-      # Variables pour l'observabilité simplifiée
+      # Variables pour l'observabilité complète
       - ENABLE_OBSERVABILITY=true
       - ENABLE_METRICS=true
       - ENVIRONMENT=development
+      - OTEL_SERVICE_NAME=plant-care-api
+      - OTEL_SERVICE_VERSION=1.0.0
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://alloy:4317
+      - OTEL_EXPORTER_OTLP_INSECURE=true
+      - OTEL_RESOURCE_ATTRIBUTES=service.name=plant-care-api,service.version=1.0.0,deployment.environment=development
+      - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
+      - OTEL_PYTHON_LOG_CORRELATION=true
+      # Désactiver auto-instrumentation pour contrôler manuellement
+      - OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=urllib3
     networks:
       - plant_care_network
     restart: unless-stopped
@@ -106,7 +115,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # Loki (logs) - conservé pour les logs
+  # Loki (logs) - avec configuration augmentée
   loki:
     image: grafana/loki:2.9.2
     container_name: plant_care_loki
@@ -124,13 +133,15 @@ services:
       timeout: 10s
       retries: 5
 
-  # Tempo (traces) - conservé pour les traces
+  # Tempo (traces) - configuration améliorée
   tempo:
     image: grafana/tempo:2.3.1
     container_name: plant_care_tempo
     ports:
       - "3200:3200"
       - "9095:9095"
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
     volumes:
       - ./observability/tempo:/etc/tempo
       - tempo_data:/tmp/tempo
@@ -144,14 +155,14 @@ services:
       timeout: 10s
       retries: 5
 
-  # Grafana Alloy (collecteur) - simplifié pour Prometheus uniquement
+  # Grafana Alloy (collecteur) - configuration complète
   alloy:
     image: grafana/alloy:latest
     container_name: plant_care_alloy
     ports:
       - "12345:12345"
-      - "4317:4317"
-      - "4318:4318"
+      - "4317:4317"  # OTLP gRPC receiver
+      - "4318:4318"  # OTLP HTTP receiver
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/log:/var/log:ro
@@ -161,6 +172,7 @@ services:
       - /etc/alloy/config.alloy
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/tmp/alloy
+      - --disable-reporting
     networks:
       - plant_care_network
     depends_on:
@@ -187,6 +199,8 @@ services:
       - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
       - GF_LOG_LEVEL=info
       - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+      - GF_TRACING_OPENTELEMETRY_OTLP_ADDRESS=alloy:4317
+      - GF_TRACING_OPENTELEMETRY_CUSTOM_ATTRIBUTES=service.name:grafana,service.version:10.2.2
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards

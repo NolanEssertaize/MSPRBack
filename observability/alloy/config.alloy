@@ -1,5 +1,5 @@
-// observability/alloy/config.alloy - Configuration simplifiée pour Prometheus
-// Configuration Grafana Alloy pour Plant Care Application - Version Prometheus
+// observability/alloy/config.alloy - Configuration simplifiée avec support traces
+// Configuration Grafana Alloy pour Plant Care Application - Version avec traces
 
 // =====================================================
 // DÉCOUVERTE DES SERVICES
@@ -16,10 +16,10 @@ discovery.docker "containers" {
 }
 
 // =====================================================
-// COLLECTE DES LOGS (conservée)
+// COLLECTE DES LOGS (simplifiée pour éviter rate limiting)
 // =====================================================
 
-// Logs des conteneurs Docker
+// Logs des conteneurs Docker - filtrés
 loki.source.docker "docker_logs" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.docker.containers.targets
@@ -47,26 +47,30 @@ loki.relabel "docker_logs" {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
     target_label  = "service"
   }
+
+  // Filtrer seulement les logs d'erreur et importants pour éviter le spam
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "plant_care_api"
+    target_label  = "__tmp_should_include"
+    replacement   = "yes"
+  }
 }
 
-// Logs système
-loki.source.file "system_logs" {
-  targets = [
-    {__path__ = "/var/log/syslog", job = "syslog"},
-    {__path__ = "/var/log/auth.log", job = "auth"},
-  ]
-
-  forward_to = [loki.process.plant_care.receiver]
-}
-
-// Traitement des logs
+// Traitement simplifié des logs
 loki.process "plant_care" {
   forward_to = [loki.write.default.receiver]
+
+  // Filtrer les logs health check pour réduire le volume
+  stage.match {
+    selector = "{job=\"syslog\"}"
+    action   = "drop"
+  }
 
   stage.json {
     expressions = {
       level     = "level",
-      timestamp = "timestamp",
+      timestamp = "timestamp", 
       message   = "message",
       service   = "service",
     }
@@ -84,21 +88,122 @@ loki.process "plant_care" {
   }
 }
 
-// Écriture vers Loki
+// Écriture vers Loki avec retry
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
+    
+    // Configuration pour éviter les erreurs de rate limit
+    max_backoff_period = "5m"
+    max_backoff_retries = 10
   }
+}
+
+// =====================================================
+// COLLECTE DES TRACES - CONFIGURATION PRINCIPALE
+// =====================================================
+
+// Réception des traces OTLP depuis l'application
+otelcol.receiver.otlp "default" {
+  grpc {
+    endpoint = "0.0.0.0:4317"
+  }
+
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+
+  output {
+    traces  = [otelcol.processor.batch.default.input]
+    logs    = [otelcol.processor.batch.otel_logs.input]
+    metrics = [otelcol.processor.batch.metrics.input]
+  }
+}
+
+// Traitement en lot des traces avec configuration optimisée
+otelcol.processor.batch "default" {
+  // Configuration pour de meilleures performances
+  send_batch_size = 1024
+  timeout = "1s"
+  send_batch_max_size = 2048
+
+  output {
+    traces = [otelcol.processor.resource.traces.input]
+  }
+}
+
+// Ajout d'attributs de ressource pour améliorer l'observabilité
+otelcol.processor.resource "traces" {
+  attributes {
+    action = "upsert"
+    key = "deployment.environment"
+    value = "development"
+  }
+  
+  attributes {
+    action = "upsert"
+    key = "service.namespace"
+    value = "plant-care"
+  }
+
+  output {
+    traces = [otelcol.exporter.otlp.tempo.input]
+  }
+}
+
+// Export vers Tempo avec configuration robuste
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "http://tempo:4317"
+    tls {
+      insecure = true
+    }
+    
+    // Configuration retry pour améliorer la fiabilité
+    retry_on_failure {
+      enabled = true
+      initial_interval = "5s"
+      max_interval = "30s"
+      max_elapsed_time = "300s"
+    }
+    
+    sending_queue {
+      enabled = true
+      num_consumers = 10
+      queue_size = 1000
+    }
+  }
+}
+
+// Traitement des logs OTLP
+otelcol.processor.batch "otel_logs" {
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
+
+// Export des logs OTLP vers Loki
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.default.receiver]
+}
+
+// Traitement des métriques OTLP
+otelcol.processor.batch "metrics" {
+  output {
+    metrics = [otelcol.exporter.prometheus.default.input]
+  }
+}
+
+// Export des métriques OTLP vers Prometheus
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.prometheus.receiver]
 }
 
 // =====================================================
 // COLLECTE DES MÉTRIQUES - VERSION PROMETHEUS
 // =====================================================
 
-// Les métriques seront collectées directement par Prometheus
-// Alloy ne fait que passer les métriques si nécessaire
-
-// Métriques des conteneurs Docker (pour remote_write vers Prometheus si besoin)
+// Métriques des conteneurs Docker
 prometheus.scrape "docker_containers" {
   targets    = discovery.docker.containers.targets
   forward_to = [prometheus.relabel.docker_metrics.receiver]
@@ -122,74 +227,25 @@ prometheus.relabel "docker_metrics" {
   }
 }
 
-// Remote write vers Prometheus (optionnel - Prometheus peut scraper directement)
+// Remote write vers Prometheus
 prometheus.remote_write "prometheus" {
   endpoint {
     url = "http://prometheus:9090/api/v1/write"
-  }
-}
-
-// =====================================================
-// COLLECTE DES TRACES (conservée)
-// =====================================================
-
-// Réception des traces OTLP
-otelcol.receiver.otlp "default" {
-  grpc {
-    endpoint = "0.0.0.0:4317"
-  }
-
-  http {
-    endpoint = "0.0.0.0:4318"
-  }
-
-  output {
-    traces  = [otelcol.processor.batch.default.input]
-    logs    = [otelcol.processor.batch.otel_logs.input]
-  }
-}
-
-// Traitement en lot des traces
-otelcol.processor.batch "default" {
-  output {
-    traces = [otelcol.exporter.otlp.tempo.input]
-  }
-}
-
-// Traitement en lot des logs OTLP
-otelcol.processor.batch "otel_logs" {
-  output {
-    logs = [otelcol.exporter.loki.default.input]
-  }
-}
-
-// Export des logs OTLP vers Loki
-otelcol.exporter.loki "default" {
-  forward_to = [loki.write.default.receiver]
-}
-
-// Export vers Tempo
-otelcol.exporter.otlp "tempo" {
-  client {
-    endpoint = "http://tempo:9095"
-    tls {
-      insecure = true
+    
+    // Configuration pour retry
+    queue_config {
+      capacity = 10000
+      max_samples_per_send = 2000
+      batch_send_deadline = "5s"
     }
   }
 }
 
 // =====================================================
-// MÉTRIQUES SYSTÈME (Node Exporter géré séparément)
+// LOGGING DE DEBUG ET MÉTRIQUES INTERNES
 // =====================================================
 
-// Node Exporter sera scrapé directement par Prometheus
-// Pas besoin de configuration ici
-
-// =====================================================
-// LOGGING DE DEBUG
-// =====================================================
-
-// Logs internes d'Alloy
+// Logs internes d'Alloy avec niveau debug pour traces
 logging {
   level  = "info"
   format = "logfmt"

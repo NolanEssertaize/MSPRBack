@@ -1,13 +1,30 @@
 """
 Module d'observabilité corrigé pour Plant Care API
-Supprime l'erreur AttributeError avec prometheus_fastapi_instrumentator
+Version avec support complet OpenTelemetry pour les traces
 """
 import logging
 import time
+import os
 from typing import Optional
 from contextlib import contextmanager
 from fastapi import FastAPI, Request
-from prometheus_fastapi_instrumentator import Instrumentator
+
+# OpenTelemetry imports
+from opentelemetry import trace, metrics
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.semconv.resource import ResourceAttributes
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+
+# Prometheus and logging
 from prometheus_client import Counter, Histogram, Gauge
 import structlog
 
@@ -20,22 +37,28 @@ active_users_gauge = None
 plants_in_care_gauge = None
 
 class ObservabilityManager:
-    """Gestionnaire d'observabilité simplifié et corrigé"""
+    """Gestionnaire d'observabilité avec support complet OpenTelemetry"""
 
     def __init__(self):
-        self.instrumentator: Optional[Instrumentator] = None
         self.logger = structlog.get_logger()
         self.current_user_id: Optional[str] = None
+        self.tracer_provider: Optional[TracerProvider] = None
+        self.meter_provider: Optional[MeterProvider] = None
+        self.tracer = None
 
     def initialize(self, app: FastAPI):
         """Initialise l'observabilité pour l'application"""
         try:
-            print("Initializing observability stack...")
+            print("Initializing full observability stack with OpenTelemetry...")
+            
+            # Setup dans l'ordre
             self.setup_logging()
-            self.setup_metrics(app)
-            self.setup_custom_metrics()
+            self.setup_opentelemetry()
+            self.setup_custom_metrics() 
+            self.setup_auto_instrumentation(app)
             self.setup_middleware(app)
-            print("Observability stack initialized successfully!")
+            
+            print("Full observability stack initialized successfully!")
 
         except Exception as e:
             print(f"Warning: Could not initialize full observability stack: {e}")
@@ -51,10 +74,11 @@ class ObservabilityManager:
                     structlog.processors.add_log_level,
                     structlog.processors.JSONRenderer()
                 ],
-                wrapper_class=structlog.make_filtering_bound_logger(30),  # INFO level
+                wrapper_class=structlog.make_filtering_bound_logger(20),  # INFO level
                 logger_factory=structlog.PrintLoggerFactory(),
                 cache_logger_on_first_use=True,
             )
+            print("Structured logging configured successfully")
         except Exception as e:
             print(f"Warning: Could not setup structured logging: {e}")
             self.setup_basic_logging()
@@ -66,35 +90,79 @@ class ObservabilityManager:
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
 
-    def setup_metrics(self, app: FastAPI):
-        """Configure les métriques Prometheus - VERSION CORRIGÉE"""
+    def setup_opentelemetry(self):
+        """Configure OpenTelemetry pour les traces et métriques"""
         try:
-            # Utiliser une configuration simplifiée de l'instrumentator
-            self.instrumentator = Instrumentator(
-                should_group_status_codes=False,
-                should_ignore_untemplated=True,
-                should_respect_env_var=True,
-                should_instrument_requests_inprogress=True,
-                excluded_handlers=[".*admin.*", "/metrics"],
-                env_var_name="ENABLE_METRICS",
-                inprogress_name="http_requests_inprogress",
-                inprogress_labels=True,
+            # Créer les ressources
+            resource = Resource.create({
+                ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "plant-care-api"),
+                ResourceAttributes.SERVICE_VERSION: os.getenv("OTEL_SERVICE_VERSION", "1.0.0"),
+                ResourceAttributes.DEPLOYMENT_ENVIRONMENT: os.getenv("ENVIRONMENT", "development"),
+            })
+
+            # Configuration du TracerProvider
+            self.tracer_provider = TracerProvider(resource=resource)
+            trace.set_tracer_provider(self.tracer_provider)
+
+            # Configuration de l'exporteur OTLP pour les traces
+            otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://alloy:4317")
+            print(f"Configuring OTLP trace exporter with endpoint: {otlp_endpoint}")
+            
+            otlp_span_exporter = OTLPSpanExporter(
+                endpoint=otlp_endpoint,
+                insecure=True,
+                headers={}
             )
 
-            # Instrumenter l'application
-            self.instrumentator.instrument(app)
+            # Ajouter le span processor
+            span_processor = BatchSpanProcessor(otlp_span_exporter)
+            self.tracer_provider.add_span_processor(span_processor)
 
-            # Exposer les métriques sur /metrics
-            self.instrumentator.expose(app, endpoint="/metrics")
+            # Obtenir le tracer
+            self.tracer = trace.get_tracer(__name__)
 
-            print("Prometheus metrics configured successfully")
+            # Configuration des métriques OTLP
+            otlp_metric_exporter = OTLPMetricExporter(
+                endpoint=otlp_endpoint,
+                insecure=True,
+                headers={}
+            )
+
+            metric_reader = PeriodicExportingMetricReader(
+                exporter=otlp_metric_exporter,
+                export_interval_millis=15000,  # 15 secondes
+            )
+
+            self.meter_provider = MeterProvider(
+                resource=resource,
+                metric_readers=[metric_reader]
+            )
+            metrics.set_meter_provider(self.meter_provider)
+
+            print("OpenTelemetry configured successfully")
 
         except Exception as e:
-            print(f"Warning: Could not setup Prometheus metrics: {e}")
-            # Ajouter un endpoint de métriques basique
-            @app.get("/metrics")
-            async def basic_metrics():
-                return {"status": "metrics_unavailable", "message": str(e)}
+            print(f"Warning: Could not setup OpenTelemetry: {e}")
+            self.tracer = None
+
+    def setup_auto_instrumentation(self, app: FastAPI):
+        """Configure l'instrumentation automatique"""
+        try:
+            # Instrumenter FastAPI
+            FastAPIInstrumentor.instrument_app(app)
+            print("FastAPI auto-instrumentation enabled")
+
+            # Instrumenter SQLAlchemy
+            SQLAlchemyInstrumentor().instrument()
+            print("SQLAlchemy auto-instrumentation enabled")
+
+            # Instrumenter les requêtes HTTP
+            RequestsInstrumentor().instrument()
+            HTTPXClientInstrumentor().instrument()
+            print("HTTP clients auto-instrumentation enabled")
+
+        except Exception as e:
+            print(f"Warning: Could not setup auto-instrumentation: {e}")
 
     def setup_custom_metrics(self):
         """Configure les métriques personnalisées pour l'application"""
@@ -137,7 +205,7 @@ class ObservabilityManager:
                 'Number of plants currently in care'
             )
 
-            print("Custom metrics configured successfully")
+            print("Custom Prometheus metrics configured successfully")
 
         except Exception as e:
             print(f"Warning: Could not setup custom metrics: {e}")
@@ -146,7 +214,7 @@ class ObservabilityManager:
         """Configure les middlewares d'observabilité"""
 
         @app.middleware("http")
-        async def logging_middleware(request: Request, call_next):
+        async def observability_middleware(request: Request, call_next):
             start_time = time.time()
 
             # Log de la requête entrante avec contexte utilisateur
@@ -164,7 +232,7 @@ class ObservabilityManager:
                 response = await call_next(request)
 
                 # Calculer le temps de traitement
-                process_time = time.time() - start_time
+                duration = time.time() - start_time
 
                 # Log de la réponse
                 self.logger.info(
@@ -172,12 +240,12 @@ class ObservabilityManager:
                     method=request.method,
                     url=str(request.url),
                     status_code=response.status_code,
-                    process_time=f"{process_time:.4f}s",
+                    duration_ms=round(duration * 1000, 2),
                     **user_context
                 )
 
                 # Ajouter le header de temps de traitement
-                response.headers["X-Process-Time"] = str(process_time)
+                response.headers["X-Process-Time"] = str(duration)
                 return response
 
             except Exception as e:
@@ -189,7 +257,7 @@ class ObservabilityManager:
                     method=request.method,
                     url=str(request.url),
                     error=str(e),
-                    process_time=f"{process_time:.4f}s",
+                    duration_ms=round(process_time * 1000, 2),
                     **user_context
                 )
                 raise
@@ -247,6 +315,11 @@ class ObservabilityManager:
     def set_current_user(self, user_id: str):
         """Définit l'utilisateur courant pour le contexte"""
         self.current_user_id = user_id
+        # Ajouter l'utilisateur aux attributs de span actuel si disponible
+        if self.tracer:
+            current_span = trace.get_current_span()
+            if current_span:
+                current_span.set_attribute("user.id", user_id)
 
     def clear_current_user(self):
         """Efface l'utilisateur courant du contexte"""
@@ -302,11 +375,29 @@ def get_logger():
     return observability.logger
 
 def get_tracer():
-    """Retourne None car on n'utilise pas OpenTelemetry tracing dans cette version simplifiée"""
-    return None
+    """Retourne le tracer OpenTelemetry"""
+    return observability.tracer
 
 def trace_function(name: str):
-    """Décorateur factice pour maintenir la compatibilité"""
+    """Décorateur pour tracer une fonction"""
     def decorator(func):
-        return func
+        def wrapper(*args, **kwargs):
+            if observability.tracer:
+                with observability.tracer.start_as_current_span(name) as span:
+                    # Ajouter des attributs de contexte si disponible
+                    if observability.current_user_id:
+                        span.set_attribute("user.id", observability.current_user_id)
+                    span.set_attribute("function.name", func.__name__)
+                    
+                    try:
+                        result = func(*args, **kwargs)
+                        span.set_attribute("function.result", "success")
+                        return result
+                    except Exception as e:
+                        span.set_attribute("function.result", "error")
+                        span.set_attribute("error.message", str(e))
+                        raise
+            else:
+                return func(*args, **kwargs)
+        return wrapper
     return decorator
