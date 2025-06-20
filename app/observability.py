@@ -5,6 +5,7 @@ Version avec support complet OpenTelemetry pour les traces
 import logging
 import time
 import os
+import inspect
 from typing import Optional
 from contextlib import contextmanager
 from fastapi import FastAPI, Request
@@ -356,23 +357,42 @@ def get_tracer():
 def trace_function(name: str):
     """Décorateur pour tracer une fonction"""
     def decorator(func):
-        def wrapper(*args, **kwargs):
-            if observability.tracer:
-                with observability.tracer.start_as_current_span(name) as span:
-                    # Ajouter des attributs de contexte si disponible
-                    if observability.current_user_id:
-                        span.set_attribute("user.id", observability.current_user_id)
-                    span.set_attribute("function.name", func.__name__)
-                    
-                    try:
-                        result = func(*args, **kwargs)
-                        span.set_attribute("function.result", "success")
-                        return result
-                    except Exception as e:
-                        span.set_attribute("function.result", "error")
-                        span.set_attribute("error.message", str(e))
-                        raise
-            else:
-                return func(*args, **kwargs)
-        return wrapper
+        if inspect.iscoroutinefunction(func):
+            async def wrapper(*args, **kwargs):
+                if observability.tracer:
+                    with observability.tracer.start_as_current_span(name) as span:
+                        if observability.current_user_id:
+                            span.set_attribute("user.id", observability.current_user_id)
+                        span.set_attribute("function.name", func.__name__)
+
+                        try:
+                            result = await func(*args, **kwargs)
+                            span.set_attribute("function.result", "success")
+                            return result
+                        except Exception as e:
+                            span.set_attribute("function.result", "error")
+                            span.set_attribute("error.message", str(e))
+                            raise
+                else:
+                    return await func(*args, **kwargs)
+            return wrapper
+        else:
+            def wrapper(*args, **kwargs):
+                if observability.tracer:
+                    with observability.tracer.start_as_current_span(name) as span:
+                        if observability.current_user_id:
+                            span.set_attribute("user.id", observability.current_user_id)
+                        span.set_attribute("function.name", func.__name__)
+
+                        try:
+                            result = func(*args, **kwargs)
+                            span.set_attribute("function.result", "success")
+                            return result
+                        except Exception as e:
+                            span.set_attribute("function.result", "error")
+                            span.set_attribute("error.message", str(e))
+                            raise
+                else:
+                    return func(*args, **kwargs)
+            return wrapper
     return decorator
