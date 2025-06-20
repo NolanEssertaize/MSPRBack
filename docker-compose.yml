@@ -161,8 +161,8 @@ services:
     container_name: plant_care_alloy
     ports:
       - "12345:12345"
-      - "4317:4317"  # OTLP gRPC receiver
-      - "4318:4318"  # OTLP HTTP receiver
+      - "14317:4317"  # OTLP gRPC receiver
+      - "14318:4318"  # OTLP HTTP receiver
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/log:/var/log:ro
