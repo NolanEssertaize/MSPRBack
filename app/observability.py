@@ -7,6 +7,7 @@ import time
 import os
 import inspect
 from typing import Optional
+from functools import wraps
 from contextlib import contextmanager
 from fastapi import FastAPI, Request
 
@@ -355,9 +356,11 @@ def get_tracer():
     return observability.tracer
 
 def trace_function(name: str):
-    """Décorateur pour tracer une fonction"""
+    """Décorateur pour tracer une fonction tout en conservant sa signature."""
+
     def decorator(func):
         if inspect.iscoroutinefunction(func):
+            @wraps(func)
             async def wrapper(*args, **kwargs):
                 if observability.tracer:
                     with observability.tracer.start_as_current_span(name) as span:
@@ -375,8 +378,11 @@ def trace_function(name: str):
                             raise
                 else:
                     return await func(*args, **kwargs)
+
+            wrapper.__signature__ = inspect.signature(func)
             return wrapper
         else:
+            @wraps(func)
             def wrapper(*args, **kwargs):
                 if observability.tracer:
                     with observability.tracer.start_as_current_span(name) as span:
@@ -394,5 +400,8 @@ def trace_function(name: str):
                             raise
                 else:
                     return func(*args, **kwargs)
+
+            wrapper.__signature__ = inspect.signature(func)
             return wrapper
+
     return decorator
