@@ -128,23 +128,25 @@ otelcol.processor.batch "default" {
   send_batch_max_size = 2048
 
   output {
-    traces = [otelcol.processor.resource.traces.input]
+    traces = [otelcol.processor.attributes.traces.input]
   }
 }
 
 // Ajout d'attributs de ressource pour améliorer l'observabilité
-otelcol.processor.resource "traces" {
-  attributes {
-    action = "upsert"
-    key = "deployment.environment"
-    value = "development"
-  }
-  
-  attributes {
-    action = "upsert"
-    key = "service.namespace"
-    value = "plant-care"
-  }
+otelcol.processor.attributes "traces" {
+  context = "resource"
+  actions = [
+    {
+      action = "upsert"
+      key    = "deployment.environment"
+      value  = "development"
+    },
+    {
+      action = "upsert"
+      key    = "service.namespace"
+      value  = "plant-care"
+    },
+  ]
 
   output {
     traces = [otelcol.exporter.otlp.tempo.input]
