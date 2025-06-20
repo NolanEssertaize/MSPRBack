@@ -134,19 +134,6 @@ otelcol.processor.batch "default" {
 
 // Ajout d'attributs de ressource pour améliorer l'observabilité
 otelcol.processor.attributes "traces" {
-  context = "resource"
-  actions = [
-    {
-      action = "upsert",
-      key    = "deployment.environment",
-      value  = "development",
-    },
-    {
-      action = "upsert",
-      key    = "service.namespace",
-      value  = "plant-care",
-    },
-  ]
 
   output {
     traces = [otelcol.exporter.otlp.tempo.input]
@@ -161,19 +148,6 @@ otelcol.exporter.otlp "tempo" {
       insecure = true
     }
     
-    // Configuration retry pour améliorer la fiabilité
-    retry_on_failure {
-      enabled = true
-      initial_interval = "5s"
-      max_interval = "30s"
-      max_elapsed_time = "300s"
-    }
-    
-    sending_queue {
-      enabled = true
-      num_consumers = 10
-      queue_size = 1000
-    }
   }
 }
 

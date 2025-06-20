@@ -79,7 +79,7 @@ async def observability_middleware(request: Request, call_next):
 
     try:
         if span_context is not None:
-            async with span_context:
+            with span_context:
                 response = await call_next(request)
         else:
             response = await call_next(request)
