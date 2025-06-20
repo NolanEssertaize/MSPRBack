@@ -223,3 +223,14 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+  hold-pr:
+    name: Hold Pull Request
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [tests, docker-build-test, security-scan]
+    steps:
+      - name: Add hold label
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          labels: hold
