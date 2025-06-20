@@ -1,0 +1,67 @@
+{
+  "title": "Plant Care - Application Overview",
+  "uid": "plant-care-overview",
+  "schemaVersion": 36,
+  "version": 1,
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "User Registrations",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "plant_care_user_registrations_total",
+          "legendFormat": "{{user_type}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1
+    },
+    {
+      "type": "timeseries",
+      "title": "Plants Created",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "plant_care_plant_creations_total",
+          "legendFormat": "{{owner_type}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2
+    },
+    {
+      "type": "logs",
+      "title": "Application Logs",
+      "datasource": "Loki",
+      "targets": [
+        {
+          "expr": "{service=\"plant-care-api\"}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+      "id": 3,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true
+      }
+    },
+    {
+      "type": "traces",
+      "title": "Recent Traces",
+      "datasource": "Tempo",
+      "targets": [
+        {
+          "expr": "service.name=\"plant-care-api\"",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 16},
+      "id": 4
+    }
+  ]
+}
