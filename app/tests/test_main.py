@@ -5,7 +5,6 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 
-# Setup test environment
 os.environ["TESTING"] = "True"
 os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
 os.environ["ENCRYPTION_ENABLED"] = "True"
@@ -25,7 +24,6 @@ def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 client = TestClient(app)
 
-# ensure photos dir exists
 os.makedirs("photos", exist_ok=True)
 
 

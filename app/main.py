@@ -43,7 +43,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def observability_middleware(request: Request, call_next):
-    """Middleware pour ajouter des informations d'observabilité"""
+    
     start_time = time.time()
 
     auth_header = request.headers.get("authorization")
@@ -112,7 +112,7 @@ async def observability_middleware(request: Request, call_next):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint pour Kubernetes/Docker"""
+    
     return {
         "status": "healthy",
         "timestamp": dt.utcnow().isoformat(),
@@ -129,9 +129,7 @@ async def preflight_handler():
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
-# Register API routers
 app.include_router(auth_routes.router)
 app.include_router(users_routes.router)
 app.include_router(plants_routes.router)
 app.include_router(comments_routes.router)
-

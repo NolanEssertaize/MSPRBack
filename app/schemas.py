@@ -3,20 +3,20 @@ import datetime
 
 
 class UserBase(pydantic.BaseModel):
-    """The base model of a User"""
+    
     email: pydantic.EmailStr
     username: str
     phone: str
 
 class UserCreate(UserBase):
-    """The model for a user creation"""
+    
     username: str
     phone: str
     password: str
     is_botanist: bool = False
 
 class UserDelete(UserBase):
-    """The model to delete a user"""
+    
 
     id: str
 

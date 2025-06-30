@@ -15,7 +15,7 @@ logger = get_logger()
 @router.post("/token", tags=["Authentication"])
 @trace_function("user_authentication")
 async def login(db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm = Depends()):
-    """Authenticate a user and return a JWT token."""
+    
     logger.info("User login attempt", email=form_data.username)
 
     email_hash = security_manager.hash_value(form_data.username)

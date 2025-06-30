@@ -1,5 +1,4 @@
 services:
-  # Base de données PostgreSQL
   postgres:
     image: postgres:15-alpine
     container_name: plant_care_postgres
@@ -20,7 +19,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # Application FastAPI
   api:
     build:
       context: .
@@ -40,7 +38,6 @@ services:
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - ENCRYPTION_KEY=your-secure-encryption-key-change-this-in-production
       - ENCRYPTION_ENABLED=true
-      # Variables pour l'observabilité complète
       - ENABLE_OBSERVABILITY=true
       - ENABLE_METRICS=true
       - ENVIRONMENT=development
@@ -51,7 +48,6 @@ services:
       - OTEL_RESOURCE_ATTRIBUTES=service.name=plant-care-api,service.version=1.0.0,deployment.environment=development
       - OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED=true
       - OTEL_PYTHON_LOG_CORRELATION=true
-      # Désactiver auto-instrumentation pour contrôler manuellement
       - OTEL_PYTHON_DISABLED_INSTRUMENTATIONS=urllib3
     networks:
       - plant_care_network
@@ -65,7 +61,6 @@ services:
     labels:
       - "observability=enabled"
 
-  # Node Exporter pour les métriques système
   node-exporter:
     image: prom/node-exporter:v1.6.1
     container_name: plant_care_node_exporter
@@ -84,7 +79,6 @@ services:
       - plant_care_network
     restart: unless-stopped
 
-  # Prometheus pour la collecte des métriques
   prometheus:
     image: prom/prometheus:v2.47.2
     container_name: plant_care_prometheus
@@ -115,7 +109,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # Loki (logs) - avec configuration augmentée
   loki:
     image: grafana/loki:2.9.2
     container_name: plant_care_loki
@@ -133,15 +126,14 @@ services:
       timeout: 10s
       retries: 5
 
-  # Tempo (traces) - configuration améliorée
   tempo:
     image: grafana/tempo:2.3.1
     container_name: plant_care_tempo
     ports:
       - "3200:3200"
       - "9095:9095"
-      - "4317:4317"  # OTLP gRPC
-      - "4318:4318"  # OTLP HTTP
+      - "4317:4317"
+      - "4318:4318"
     volumes:
       - ./observability/tempo:/etc/tempo
       - tempo_data:/tmp/tempo
@@ -155,14 +147,13 @@ services:
       timeout: 10s
       retries: 5
 
-  # Grafana Alloy (collecteur) - configuration complète
   alloy:
     image: grafana/alloy:latest
     container_name: plant_care_alloy
     ports:
       - "12345:12345"
-      - "14317:4317"  # OTLP gRPC receiver
-      - "14318:4318"  # OTLP HTTP receiver
+      - "14317:4317"
+      - "14318:4318"
     volumes:
       - ./observability/alloy:/etc/alloy:ro
       - /var/log:/var/log:ro
@@ -188,7 +179,6 @@ services:
       timeout: 10s
       retries: 5
 
-  # Grafana (visualisation)
   grafana:
     image: grafana/grafana:10.2.2
     container_name: plant_care_grafana
