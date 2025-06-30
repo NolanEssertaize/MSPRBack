@@ -1,14 +1,16 @@
 import os
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.database import Base, get_db
-from app.main import app
 
 # Setup test environment
 os.environ["TESTING"] = "True"
 os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
 os.environ["ENCRYPTION_ENABLED"] = "True"
+os.environ["TEST_DATABASE_URL"] = "sqlite:///./test_a_rosa_je.db"
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.database import Base, get_db
+from app.main import app
 
 TEST_DATABASE_URL = "sqlite:///./test_a_rosa_je.db"
 engine = create_engine(TEST_DATABASE_URL)

@@ -8,6 +8,7 @@ import time
 from app import models
 from app.database import engine
 from app.observability import observability, get_logger, get_tracer
+from app.config import settings
 
 from app.routers import auth as auth_routes
 from app.routers import users as users_routes
@@ -23,7 +24,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-observability.initialize(app)
+if settings.ENABLE_OBSERVABILITY:
+    observability.initialize(app)
 logger = get_logger()
 tracer = get_tracer()
 

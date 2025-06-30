@@ -1,4 +1,11 @@
 import os
+
+# Configuration spécifique pour les tests
+os.environ["TESTING"] = "True"
+os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
+os.environ["ENCRYPTION_ENABLED"] = "True"
+os.environ["TEST_DATABASE_URL"] = "sqlite:///./test_a_rosa_je.db"
+
 import pytest
 from fastapi.testclient import TestClient
 import json
@@ -8,11 +15,6 @@ from app.database import Base, get_db
 from app.main import app
 from app.config import settings
 from app.security import security_manager
-
-# Configuration spécifique pour les tests
-os.environ["TESTING"] = "True"
-os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
-os.environ["ENCRYPTION_ENABLED"] = "True"
 
 # Créer une base de données de test SQLite en mémoire
 TEST_DATABASE_URL = "sqlite:///./test_a_rosa_je.db"
@@ -48,7 +50,8 @@ def test_user_token():
     }
     response = client.post("/users/", json=user_data)
     assert response.status_code == 200, f"Création d'utilisateur échouée: {response.json()}"
-    
+    user_id = response.json()["id"]
+
     # Obtenir un token
     login_data = {
         "username": user_data["email"],
@@ -59,7 +62,7 @@ def test_user_token():
     token_data = response.json()
     
     return {
-        "user_id": response.json()["id"],
+        "user_id": user_id,
         "token": token_data["access_token"],
         "user_data": user_data
     }
@@ -77,7 +80,8 @@ def test_botanist_token():
     }
     response = client.post("/users/", json=botanist_data)
     assert response.status_code == 200, f"Création de botaniste échouée: {response.json()}"
-    
+    botanist_id = response.json()["id"]
+
     # Obtenir un token
     login_data = {
         "username": botanist_data["email"],
@@ -88,7 +92,7 @@ def test_botanist_token():
     token_data = response.json()
     
     return {
-        "user_id": response.json()["id"],
+        "user_id": botanist_id,
         "token": token_data["access_token"],
         "user_data": botanist_data
     }
