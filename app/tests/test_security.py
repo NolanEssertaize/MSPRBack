@@ -1,5 +1,12 @@
 # app/tests/test_security_e2e.py
 import os
+
+# Configuration spécifique pour les tests
+os.environ["TESTING"] = "True"
+os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
+os.environ["ENCRYPTION_ENABLED"] = "True"
+os.environ["TEST_DATABASE_URL"] = "sqlite:///./test_a_rosa_je.db"
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -10,11 +17,6 @@ from app.config import settings
 from app.security import security_manager
 from app import models
 import json
-
-# Configuration spécifique pour les tests
-os.environ["TESTING"] = "True"
-os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
-os.environ["ENCRYPTION_ENABLED"] = "True"
 
 # Créer une base de données de test SQLite
 TEST_DATABASE_URL = "sqlite:///./test_a_rosa_je.db"
@@ -111,9 +113,15 @@ def test_token_expiration():
     }
     response = client.post("/token", data=login_data)
     token = response.json()["access_token"]
-    
-    # Tenter d'utiliser le token qui a expiré
-    headers = {"Authorization": f"Bearer {token}"}
+
+    # Forcer l'expiration du token en ajustant la date d'expiration
+    import time
+    from jose import jwt
+    payload = jwt.get_unverified_claims(token)
+    payload["exp"] = int(time.time()) - 1
+    expired_token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+    headers = {"Authorization": f"Bearer {expired_token}"}
     response = client.get("/users/me/", headers=headers)
     
     # Restaurer le temps d'expiration original
@@ -135,13 +143,16 @@ def test_invalid_token():
 
 def test_password_security(test_user_data):
     """Test que les mots de passe sont correctement hachés et vérifiés"""
-    # Créer un utilisateur
-    response = client.post("/users/", json=test_user_data)
+    # Créer un utilisateur distinct pour ce test
+    unique_data = test_user_data.copy()
+    unique_data["email"] = "security2@example.com"
+    unique_data["username"] = "securityuser2"
+    response = client.post("/users/", json=unique_data)
     assert response.status_code == 200
     
     # Récupérer l'utilisateur directement depuis la base de données
     db = get_db_session()
-    email_hash = security_manager.hash_value(test_user_data["email"])
+    email_hash = security_manager.hash_value(unique_data["email"])
     db_user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
     
     # Vérifier que le mot de passe est bien haché (ne contient pas le mot de passe en clair)
@@ -149,15 +160,15 @@ def test_password_security(test_user_data):
     
     # Vérifier que le login fonctionne avec le bon mot de passe
     login_data = {
-        "username": test_user_data["email"],
-        "password": test_user_data["password"]
+        "username": unique_data["email"],
+        "password": unique_data["password"]
     }
     response = client.post("/token", data=login_data)
     assert response.status_code == 200
     
     # Vérifier que le login échoue avec un mauvais mot de passe
     wrong_login_data = {
-        "username": test_user_data["email"],
+        "username": unique_data["email"],
         "password": "wrongpassword"
     }
     response = client.post("/token", data=wrong_login_data)

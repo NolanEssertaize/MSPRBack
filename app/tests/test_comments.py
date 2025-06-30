@@ -1,5 +1,12 @@
 # app/tests/test_comments_e2e.py
 import os
+
+# Configuration spécifique pour les tests
+os.environ["TESTING"] = "True"
+os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
+os.environ["ENCRYPTION_ENABLED"] = "True"
+os.environ["TEST_DATABASE_URL"] = "sqlite:///./test_a_rosa_je.db"
+
 import pytest
 from fastapi.testclient import TestClient
 import io
@@ -8,11 +15,6 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from app.main import app
 from app.config import settings
-
-# Configuration spécifique pour les tests
-os.environ["TESTING"] = "True"
-os.environ["ENCRYPTION_KEY"] = "test-encryption-key-for-testing"
-os.environ["ENCRYPTION_ENABLED"] = "True"
 
 # Créer une base de données de test SQLite
 TEST_DATABASE_URL = "sqlite:///./test_a_rosa_je.db"
@@ -113,7 +115,7 @@ def test_plant(test_user_token):
     
     response = client.post(
         "/plants/",
-        data=plant_data,
+        params=plant_data,
         files=files,
         headers=headers
     )
@@ -341,7 +343,7 @@ def test_unauthorized_comment_delete(test_user_token, test_botanist_token, test_
     }
     files = {"photo": ("empty.jpg", io.BytesIO(b""), "image/jpeg")}
     
-    plant_response = client.post("/plants/", data=plant_data, files=files, headers=botanist_headers)
+    plant_response = client.post("/plants/", params=plant_data, files=files, headers=botanist_headers)
     assert plant_response.status_code == 200
     botanist_plant_id = plant_response.json()["id"]
     
