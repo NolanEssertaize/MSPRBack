@@ -34,7 +34,15 @@ check_prerequisites() {
     fi
 
 
+<<<<<<< HEAD
     if ! command -v docker compose &> /dev/null && ! docker compose version &> /dev/null; then
+=======
+<<<<<<< HEAD:setup_observability.sh
+    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+=======
+    if ! command -v docker compose &> /dev/null && ! docker compose version &> /dev/null; then
+>>>>>>> a3ba0e1 (Update script and remove useless files):setup_backend.sh
+>>>>>>> 437e1e8 (Update script and remove useless files)
         log_error "Docker Compose n'est pas installé"
         exit 1
     fi
@@ -134,11 +142,23 @@ EOF
 start_stack() {
     log_info "Démarrage de la stack d'observabilité..."
 
+<<<<<<< HEAD:setup_observability.sh
+
+    docker compose build
+
+
+<<<<<<< HEAD
+    docker compose up -d
+=======
+    docker-compose -f docker-compose.observability.yml up -d
+=======
 
     docker compose build
 
 
     docker compose up -d
+>>>>>>> a3ba0e1 (Update script and remove useless files):setup_backend.sh
+>>>>>>> 437e1e8 (Update script and remove useless files)
 
     log_success "Stack démarrée"
 }
@@ -194,7 +214,15 @@ run_migrations() {
 
     docker compose exec api alembic upgrade head
 
+<<<<<<< HEAD:setup_observability.sh
 
+<<<<<<< HEAD
+=======
+    docker-compose -f docker-compose.observability.yml exec postgres psql -U plant_user -d plant_care_db -c "SELECT create_performance_indexes();"
+=======
+>>>>>>> a3ba0e1 (Update script and remove useless files):setup_backend.sh
+
+>>>>>>> 437e1e8 (Update script and remove useless files)
     log_success "Migrations exécutées"
 }
 
