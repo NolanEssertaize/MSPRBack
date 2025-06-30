@@ -17,7 +17,7 @@ async def create_comment(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """Create a comment on a plant."""
+    
     logger.info("Creating comment", plant_id=plant_id, user_id=current_user.id)
 
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
@@ -53,7 +53,7 @@ async def get_plant_comments(
         plant_id: int,
         db: Session = Depends(get_db)
 ):
-    """Get all comments for a specific plant."""
+    
     logger.info("Getting plant comments", plant_id=plant_id)
 
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
@@ -74,7 +74,7 @@ async def update_comment(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """Update a comment."""
+    
     logger.info("Updating comment", comment_id=comment_id, user_id=current_user.id)
 
     db_comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
@@ -104,7 +104,7 @@ async def delete_comment(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """Delete a comment."""
+    
     logger.info("Deleting comment", comment_id=comment_id, user_id=current_user.id)
 
     db_comment = db.query(models.Comment).filter(models.Comment.id == comment_id).first()
@@ -138,7 +138,7 @@ async def get_user_comments(
         db: Session = Depends(get_db),
         current_user: models.User = Depends(auth.get_current_user)
 ):
-    """Get all comments made by a specific user."""
+    
     logger.info("Getting user comments", target_user_id=user_id, current_user_id=current_user.id)
 
     user = db.query(models.User).filter(models.User.id == user_id).first()

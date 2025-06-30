@@ -2,6 +2,8 @@
 
 Cette documentation décrit l'implémentation de la stack d'observabilité LGTM (Loki, Grafana, Tempo, Mimir) avec Grafana Alloy pour l'application Plant Care.
 
+Code sans commentaires pour plus de clarté.
+
 ## 🚀 Démarrage Rapide
 
 ### Prérequis

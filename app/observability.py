@@ -1,7 +1,3 @@
-"""
-Module d'observabilité corrigé pour Plant Care API
-Version avec support complet OpenTelemetry pour les traces
-"""
 import logging
 import time
 import os
@@ -36,7 +32,7 @@ active_users_gauge = None
 plants_in_care_gauge = None
 
 class ObservabilityManager:
-    """Gestionnaire d'observabilité avec support complet OpenTelemetry"""
+    
 
     def __init__(self):
         self.logger = structlog.get_logger()
@@ -46,7 +42,7 @@ class ObservabilityManager:
         self.tracer = None
 
     def initialize(self, app: FastAPI):
-        """Initialise l'observabilité pour l'application"""
+        
         try:
             print("Initializing full observability stack with OpenTelemetry...")
             
@@ -64,7 +60,7 @@ class ObservabilityManager:
             self.setup_basic_logging()
 
     def setup_logging(self):
-        """Configure le logging structuré"""
+        
         try:
             structlog.configure(
                 processors=[
@@ -82,14 +78,14 @@ class ObservabilityManager:
             self.setup_basic_logging()
 
     def setup_basic_logging(self):
-        """Configure un logging basique en cas d'échec"""
+        
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
 
     def setup_opentelemetry(self):
-        """Configure OpenTelemetry pour les traces et métriques"""
+        
         try:
             resource = Resource.create({
                 ResourceAttributes.SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "plant-care-api"),
@@ -138,7 +134,7 @@ class ObservabilityManager:
             self.tracer = None
 
     def setup_auto_instrumentation(self, app: FastAPI):
-        """Configure l'instrumentation automatique"""
+        
         try:
             FastAPIInstrumentor.instrument_app(app)
             print("FastAPI auto-instrumentation enabled")
@@ -154,7 +150,7 @@ class ObservabilityManager:
             print(f"Warning: Could not setup auto-instrumentation: {e}")
 
     def setup_custom_metrics(self):
-        """Configure les métriques personnalisées pour l'application"""
+        
         global user_registrations_counter, plant_creations_counter, care_requests_counter
         global comments_counter, active_users_gauge, plants_in_care_gauge
 
@@ -198,7 +194,7 @@ class ObservabilityManager:
             print(f"Warning: Could not setup custom metrics: {e}")
 
     def setup_middleware(self, app: FastAPI):
-        """Configure les middlewares d'observabilité"""
+        
 
         @app.middleware("http")
         async def observability_middleware(request: Request, call_next):
@@ -234,7 +230,6 @@ class ObservabilityManager:
             except Exception as e:
                 process_time = time.time() - start_time
 
-                # Log de l'erreur
                 self.logger.error(
                     "request_failed",
                     method=request.method,
@@ -246,7 +241,7 @@ class ObservabilityManager:
                 raise
 
     def record_user_registration(self, user_type: str = "regular"):
-        """Enregistre une inscription d'utilisateur"""
+        
         try:
             if user_registrations_counter:
                 user_registrations_counter.labels(user_type=user_type).inc()
@@ -254,7 +249,7 @@ class ObservabilityManager:
             print(f"Error recording user registration metric: {e}")
 
     def record_plant_creation(self, owner_type: str = "regular"):
-        """Enregistre la création d'une plante"""
+        
         try:
             if plant_creations_counter:
                 plant_creations_counter.labels(owner_type=owner_type).inc()
@@ -262,7 +257,7 @@ class ObservabilityManager:
             print(f"Error recording plant creation metric: {e}")
 
     def record_care_request(self, action: str):
-        """Enregistre une demande de soin"""
+        
         try:
             if care_requests_counter:
                 care_requests_counter.labels(action=action).inc()
@@ -270,7 +265,7 @@ class ObservabilityManager:
             print(f"Error recording care request metric: {e}")
 
     def record_comment_creation(self):
-        """Enregistre la création d'un commentaire"""
+        
         try:
             if comments_counter:
                 comments_counter.inc()
@@ -278,7 +273,7 @@ class ObservabilityManager:
             print(f"Error recording comment creation metric: {e}")
 
     def update_active_users(self, count: int):
-        """Met à jour le nombre d'utilisateurs actifs"""
+        
         try:
             if active_users_gauge:
                 active_users_gauge.set(count)
@@ -286,7 +281,7 @@ class ObservabilityManager:
             print(f"Error updating active users metric: {e}")
 
     def update_plants_in_care(self, count: int):
-        """Met à jour le nombre de plantes en soin"""
+        
         try:
             if plants_in_care_gauge:
                 plants_in_care_gauge.set(count)
@@ -294,7 +289,7 @@ class ObservabilityManager:
             print(f"Error updating plants in care metric: {e}")
 
     def set_current_user(self, user_id: str):
-        """Définit l'utilisateur courant pour le contexte"""
+        
         self.current_user_id = user_id
         if self.tracer:
             current_span = trace.get_current_span()
@@ -302,12 +297,12 @@ class ObservabilityManager:
                 current_span.set_attribute("user.id", user_id)
 
     def clear_current_user(self):
-        """Efface l'utilisateur courant du contexte"""
+        
         self.current_user_id = None
 
     @contextmanager
     def user_context(self, user_id: str):
-        """Context manager pour définir temporairement un utilisateur"""
+        
         old_user = self.current_user_id
         self.set_current_user(user_id)
         try:
@@ -319,7 +314,7 @@ class ObservabilityManager:
                 self.clear_current_user()
 
     def log_info(self, message: str, **kwargs):
-        """Log d'information avec contexte utilisateur"""
+        
         try:
             if self.current_user_id:
                 kwargs["user_id"] = self.current_user_id
@@ -328,7 +323,7 @@ class ObservabilityManager:
             print(f"INFO: {message} - {kwargs}")
 
     def log_error(self, message: str, **kwargs):
-        """Log d'erreur avec contexte utilisateur"""
+        
         try:
             if self.current_user_id:
                 kwargs["user_id"] = self.current_user_id
@@ -337,7 +332,7 @@ class ObservabilityManager:
             print(f"ERROR: {message} - {kwargs}")
 
     def log_warning(self, message: str, **kwargs):
-        """Log d'avertissement avec contexte utilisateur"""
+        
         try:
             if self.current_user_id:
                 kwargs["user_id"] = self.current_user_id
@@ -348,15 +343,15 @@ class ObservabilityManager:
 observability = ObservabilityManager()
 
 def get_logger():
-    """Retourne le logger structuré"""
+    
     return observability.logger
 
 def get_tracer():
-    """Retourne le tracer OpenTelemetry"""
+    
     return observability.tracer
 
 def trace_function(name: str):
-    """Décorateur pour tracer une fonction tout en conservant sa signature."""
+    
 
     def decorator(func):
         if inspect.iscoroutinefunction(func):

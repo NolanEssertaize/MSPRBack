@@ -22,7 +22,7 @@ async def create_plant(
         in_care_id: int = None,
         db: Session = Depends(get_db)
 ):
-    """Create a new plant entry."""
+    
     logger.info(
         "Creating new plant",
         plant_name=name,
@@ -74,7 +74,7 @@ async def update_plant(
         in_care_id: int = None,
         db: Session = Depends(get_db)
 ):
-    """Update an existing plant."""
+    
     logger.info("Updating plant", plant_id=plant_id, user_id=current_user.id)
 
     plant = db.query(models.Plant).filter(
@@ -131,7 +131,7 @@ async def delete_plant(
         plant_id: int,
         db: Session = Depends(get_db)
 ):
-    """Delete a plant."""
+    
     logger.info("Deleting plant", plant_id=plant_id)
 
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
@@ -154,7 +154,7 @@ async def list_plants_users_plant(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """List all plants owned by the current user."""
+    
     logger.info("Listing user plants", user_id=current_user.id)
 
     plants = db.query(models.Plant).filter(models.Plant.owner_id == current_user.id).all()
@@ -172,7 +172,7 @@ async def list_all_plants_except_users(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """List all plants except those owned by the current user."""
+    
     logger.info("Listing all plants except user's", user_id=current_user.id)
 
     plants = db.query(models.Plant).filter(models.Plant.owner_id != current_user.id).all()
@@ -191,7 +191,7 @@ async def start_plant_care(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """Start plant care by assigning a botanist."""
+    
     logger.info("Starting plant care", plant_id=plant_id, botanist_id=current_user.id)
 
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
@@ -215,7 +215,7 @@ async def end_plant_care(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """End plant care."""
+    
     logger.info("Ending plant care", plant_id=plant_id, botanist_id=current_user.id)
 
     plant = db.query(models.Plant).filter(models.Plant.id == plant_id).first()
@@ -243,7 +243,7 @@ async def list_care_requests(
         current_user: models.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """List care requests."""
+    
     logger.info("Listing care requests", user_id=current_user.id)
 
     care_requests = db.query(models.Plant).filter(

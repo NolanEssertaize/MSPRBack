@@ -1,4 +1,3 @@
-# Configuration Mimir ultra-simplifiée
 multitenancy_enabled: false
 
 server:

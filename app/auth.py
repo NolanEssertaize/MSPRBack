@@ -31,42 +31,33 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     return encoded_jwt
 
 def get_user_by_email(db: Session, email: str):
-    """
-    Trouve un utilisateur par email, en utilisant le hash pour la recherche
-    """
+    
     email_hash = security_manager.hash_value(email)
     return db.query(models.User).filter(models.User.email_hash == email_hash).first()
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
-    """
-    Récupère l'utilisateur courant à partir du token JWT.
     
-    La fonction décode le token, extrait l'email, puis cherche l'utilisateur
-    correspondant dans la base de données en utilisant le hash de l'email.
-    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        # Décodage du token JWT
+
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
     except JWTError:
         raise credentials_exception
-    
-    # Recherche de l'utilisateur par hash d'email
+
     email_hash = security_manager.hash_value(email)
     user = db.query(models.User).filter(models.User.email_hash == email_hash).first()
     
     if user is None:
         raise credentials_exception
-    
-    # Création d'un dictionnaire contenant les informations déchiffrées
+
     return schemas.User(
         id=user.id,
         email=security_manager.decrypt_value(user.email_encrypted),
@@ -77,7 +68,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     )
 
 def authenticate_user(db: Session, email: str, password: str):
-    """Authenticate a user with email and password, handling encrypted fields."""
+    
     user = get_user_by_email(db, email)
     if not user:
         return False

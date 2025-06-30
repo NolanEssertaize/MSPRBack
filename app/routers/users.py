@@ -13,7 +13,7 @@ logger = get_logger()
 @router.post("/users/", response_model=schemas.User, tags=["Users"])
 @trace_function("user_creation")
 async def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    """Create a new user with hashing and encryption."""
+    
     logger.info("Creating new user", email=user.email, username=user.username, is_botanist=user.is_botanist)
 
     email_hash = security_manager.hash_value(user.email)
@@ -69,7 +69,7 @@ async def edit_user(
         current_user: schemas.User = Depends(auth.get_current_user),
         db: Session = Depends(get_db)
 ):
-    """Update an existing user account."""
+    
     logger.info("Updating user", user_id=user_id, current_user_id=current_user.id)
 
     if user_id != current_user.id:
@@ -126,14 +126,14 @@ async def edit_user(
 @router.get("/users/me/", tags=["Users"])
 @trace_function("get_current_user")
 async def read_users_me(current_user: models.User = Depends(auth.get_current_user)):
-    """Get details of the currently authenticated user."""
+    
     logger.info("Getting current user details", user_id=current_user.id)
     return current_user
 
 @router.delete("/users/", tags=["Users"])
 @trace_function("user_deletion")
 async def delete_user(id: int, db: Session = Depends(get_db), current_user: models.User = Depends(auth.get_current_user)):
-    """Delete a user account."""
+    
     logger.info("Deleting user", user_id=id, current_user_id=current_user.id)
 
     db_user = db.query(models.User).filter(models.User.id == id).first()
