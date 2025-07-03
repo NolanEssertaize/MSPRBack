@@ -104,5 +104,5 @@ class Comment(Base):
     comment = Column(String, nullable=False)
     time_stamp = Column(DateTime, nullable=False)
     
-    user = relationship("User", back_populates="comments")
+    user = relationship("User", back_populates="comments", lazy="joined")
     plant = relationship("Plant", back_populates="comments")
