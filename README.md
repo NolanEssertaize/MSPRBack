@@ -2,7 +2,7 @@
 
 Cette documentation décrit l'implémentation de la stack d'observabilité LGTM (Loki, Grafana, Tempo, Mimir) avec Grafana Alloy pour l'application Plant Care.
 
-## 🚀 Démarrage Rapide
+##  Démarrage Rapide
 
 ### Prérequis
 - Docker et Docker Compose
@@ -29,7 +29,7 @@ Le script va automatiquement :
 - Exécuter les migrations de base de données
 - Configurer les dashboards Grafana
 
-## 🏗️ Architecture
+##  Architecture
 
 ### Services Déployés
 
@@ -51,7 +51,7 @@ Application FastAPI → Alloy → LGTM Stack → Grafana
               [Logs, Traces, Métriques]
 ```
 
-## 📊 Observabilité
+##  Observabilité
 
 ### Métriques Collectées
 
@@ -88,7 +88,7 @@ OpenTelemetry auto-instrumente :
 - Requêtes HTTP sortantes
 - Opérations personnalisées avec `@trace_function`
 
-## 📈 Dashboards Grafana
+##  Dashboards Grafana
 
 ### Dashboard Principal : "Plant Care - Application Overview"
 
@@ -106,7 +106,7 @@ OpenTelemetry auto-instrumente :
 - Login: `admin`
 - Password: `admin`
 
-## 🔧 Configuration
+##  Configuration
 
 ### Variables d'Environnement
 
@@ -141,7 +141,7 @@ Optimisations incluses :
 - Fonctions d'analyse et monitoring
 - Audit trail optionnel
 
-## 🔍 Utilisation
+##  Utilisation
 
 ### Recherche dans les Logs (Loki)
 
@@ -176,7 +176,7 @@ rate(plant_care_request_duration_seconds_count[5m])
 - Recherche par utilisateur : `user.id="123"`
 - Recherche par durée : `duration > 1s`
 
-## 🚨 Alertes
+##  Alertes
 
 ### Alertes Configurées
 
@@ -244,7 +244,7 @@ docker-compose -f docker-compose.observability.yml exec postgres \
 docker cp plant_care_grafana:/var/lib/grafana ./grafana-backup
 ```
 
-## 🔒 Sécurité
+##  Sécurité
 
 ### Bonnes Pratiques Implémentées
 
@@ -311,14 +311,14 @@ docker-compose -f docker-compose.observability.yml exec api \
   python -c "import logging; logging.basicConfig(level=logging.DEBUG)"
 ```
 
-## 📚 Ressources
+##  Ressources
 
 - [Documentation Grafana Alloy](https://grafana.com/docs/alloy/)
 - [Documentation OpenTelemetry Python](https://opentelemetry.io/docs/instrumentation/python/)
 - [Documentation FastAPI](https://fastapi.tiangolo.com/)
 - [Documentation PostgreSQL](https://www.postgresql.org/docs/)
 
-## 🤝 Contribution
+##  Contribution
 
 Pour contribuer à l'amélioration de la stack d'observabilité :
 
@@ -327,7 +327,7 @@ Pour contribuer à l'amélioration de la stack d'observabilité :
 3. Tester les modifications avec la stack complète
 4. Soumettre une pull request
 
-## 📞 Support
+##  Support
 
 En cas de problème avec la stack d'observabilité :
 
